@@ -79,12 +79,12 @@ export function TimesheetGrid({
   };
   const stickyNameTh: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 15, backgroundColor: "#f9fafb",
-    textAlign: "left", padding: "6px 12px", fontSize: 12, fontWeight: 600,
-    border: "1px solid #e5e7eb", minWidth: 200, whiteSpace: "nowrap",
+    textAlign: "left", padding: "6px 8px", fontSize: 12, fontWeight: 600,
+    border: "1px solid #e5e7eb", minWidth: 160, maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   };
   const stickyNameTd: React.CSSProperties = {
     position: "sticky", left: 0, zIndex: 10, backgroundColor: "white",
-    padding: "4px 12px", fontSize: 12, border: "1px solid #e5e7eb", minWidth: 200, whiteSpace: "nowrap",
+    padding: "4px 8px", fontSize: 12, border: "1px solid #e5e7eb", minWidth: 160, maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
   };
   const totalTh: React.CSSProperties = { ...thBase, minWidth: 44, width: 44 };
 

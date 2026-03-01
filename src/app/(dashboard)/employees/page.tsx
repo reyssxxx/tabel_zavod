@@ -171,16 +171,16 @@ export default function EmployeesPage() {
         </div>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>ФИО</TableHead>
-              <TableHead>Должность</TableHead>
-              <TableHead>Подразделение</TableHead>
-              <TableHead>Таб. №</TableHead>
+              <TableHead className="hidden sm:table-cell">Должность</TableHead>
+              <TableHead className="hidden md:table-cell">Подразделение</TableHead>
+              <TableHead className="hidden sm:table-cell">Таб. №</TableHead>
               <TableHead>Статус</TableHead>
-              {!isAccountant && <TableHead className="w-24 text-right">Действия</TableHead>}
+              {!isAccountant && <TableHead className="w-20 text-right">Действия</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -208,21 +208,24 @@ export default function EmployeesPage() {
                       {emp.fullName}
                       {(emp.linkedEmployee || (emp.linkedBy && emp.linkedBy.length > 0)) && (
                         <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50">
-                          Совместитель
+                          Совм.
                         </Badge>
                       )}
                     </div>
+                    <div className="sm:hidden text-xs text-muted-foreground mt-0.5">
+                      {emp.department.name}{emp.position ? ' · ' + emp.position : ''}
+                    </div>
                     {emp.schedule && (
-                      <span className="text-xs text-muted-foreground">{emp.schedule.name}</span>
+                      <span className="text-xs text-muted-foreground hidden sm:block">{emp.schedule.name}</span>
                     )}
                   </TableCell>
-                  <TableCell>{emp.position}</TableCell>
-                  <TableCell>{emp.department.name}</TableCell>
-                  <TableCell>{emp.personnelNumber}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{emp.position}</TableCell>
+                  <TableCell className="hidden md:table-cell">{emp.department.name}</TableCell>
+                  <TableCell className="hidden sm:table-cell">{emp.personnelNumber}</TableCell>
                   <TableCell>
                     {emp.isActive ? (
-                      <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-white">
-                        Активен
+                      <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-white text-xs">
+                        <span className="hidden sm:inline">Активен</span><span className="sm:hidden">✓</span
                       </Badge>
                     ) : (
                       <Badge variant="secondary">Неактивен</Badge>

@@ -255,7 +255,10 @@ export default function TimesheetPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold">Табель учёта рабочего времени</h1>
+        <h1 className="text-xl md:text-2xl font-bold">
+          <span className="hidden sm:inline">Табель учёта рабочего времени</span>
+          <span className="sm:hidden">Табель</span>
+        </h1>
         <div className="flex items-center gap-2">
           {data && (
             <span className="text-sm text-muted-foreground">
@@ -388,19 +391,21 @@ export default function TimesheetPage() {
             )}
           </div>
 
-          <TimesheetGrid
-            rows={filteredRows}
-            markTypes={data.markTypes}
-            holidays={data.holidays}
-            daysInMonth={data.daysInMonth}
-            year={year}
-            month={month}
-            canEdit={canEditRows}
-            onCellUpdate={handleCellUpdate}
-            selectionMode={selectionMode}
-            selectedCells={selectedCells}
-            onCellSelect={handleCellSelect}
-          />
+          <div className="-mx-4 md:mx-0">
+            <TimesheetGrid
+              rows={filteredRows}
+              markTypes={data.markTypes}
+              holidays={data.holidays}
+              daysInMonth={data.daysInMonth}
+              year={year}
+              month={month}
+              canEdit={canEditRows}
+              onCellUpdate={handleCellUpdate}
+              selectionMode={selectionMode}
+              selectedCells={selectedCells}
+              onCellSelect={handleCellSelect}
+            />
+          </div>
 
           {/* Bulk action bar */}
           {selectionMode && selectedCells.size > 0 && (
