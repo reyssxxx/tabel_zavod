@@ -8,6 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+const DEMO_ACCOUNTS = [
+  { label: "Соколов Дмитрий (Администратор)",    email: "sokolov.dmitry@tantk.ru",  password: "Beriev@2026",  color: "bg-red-500",    role: "ADMIN" },
+  { label: "Васильев Олег (Мастер Цеха №1)",      email: "vasiliev.oleg@tantk.ru",   password: "Ceh1Master!",  color: "bg-blue-500",   role: "MANAGER" },
+  { label: "Захаров Роман (Мастер Цеха №2)",      email: "zaharov.roman@tantk.ru",   password: "Ceh2Master!",  color: "bg-blue-400",   role: "MANAGER" },
+  { label: "Фёдоров Михаил (Мастер Цеха №3)",     email: "fedorov.mikhail@tantk.ru", password: "Ceh3Master!",  color: "bg-blue-300",   role: "MANAGER" },
+  { label: "Петрова Марина (Бухгалтер)",          email: "petrova.marina@tantk.ru",  password: "Buhgalter1!", color: "bg-green-500",  role: "ACCOUNTANT" },
+  { label: "Орлова Наталья (Бухгалтер)",          email: "orlova.natalia@tantk.ru",  password: "Buhgalter2!", color: "bg-green-400",  role: "ACCOUNTANT" },
+  { label: "Смирнова Елена (Специалист ОК)",      email: "smirnova.elena@tantk.ru",  password: "HrOtdel2026!", color: "bg-purple-500", role: "HR" },
+  { label: "Кузнецова Ирина (Специалист ОК)",     email: "kuznetsova.irina@tantk.ru",password: "HrSpec2026!", color: "bg-purple-400", role: "HR" },
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -15,19 +26,15 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const doLogin = async (loginEmail: string, loginPassword: string) => {
     setError("");
     setLoading(true);
-
     const result = await signIn("credentials", {
-      email,
-      password,
+      email: loginEmail,
+      password: loginPassword,
       redirect: false,
     });
-
     setLoading(false);
-
     if (result?.error) {
       setError("Неверный email или пароль");
     } else {
@@ -36,32 +43,18 @@ export default function LoginPage() {
     }
   };
 
-  const quickLogin = async (email: string, password: string) => {
-    setLoading(true);
-    setError("");
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (result?.error) {
-      setError("Ошибка входа");
-    } else {
-      router.push("/");
-      router.refresh();
-    }
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    doLogin(email, password);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/40 p-4">
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-4">
         <Card>
           <CardHeader className="text-center">
             <CardTitle className="text-2xl">Табель учёта рабочего времени</CardTitle>
-            <CardDescription>
-              АО &laquo;ТАНТК им. Г.М. Бериева&raquo;
-            </CardDescription>
+            <CardDescription>АО &laquo;ТАНТК им. Г.М. Бериева&raquo;</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -87,9 +80,7 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              {error && (
-                <p className="text-sm text-destructive">{error}</p>
-              )}
+              {error && <p className="text-sm text-destructive">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? "Вход..." : "Войти"}
               </Button>
@@ -98,43 +89,24 @@ export default function LoginPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Быстрый вход (демо)</CardTitle>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Быстрый вход (демо)
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => quickLogin("admin@tabel.ru", "admin123")}
-              disabled={loading}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-red-500" />
-                Администратор
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => quickLogin("master@tabel.ru", "master123")}
-              disabled={loading}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-blue-500" />
-                Мастер Цеха №1
-              </span>
-            </Button>
-            <Button
-              variant="outline"
-              className="w-full justify-start"
-              onClick={() => quickLogin("buh@tabel.ru", "buh123")}
-              disabled={loading}
-            >
-              <span className="inline-flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-                Бухгалтер
-              </span>
-            </Button>
+          <CardContent className="space-y-1.5">
+            {DEMO_ACCOUNTS.map((acc) => (
+              <Button
+                key={acc.email}
+                variant="outline"
+                className="w-full justify-start h-9 text-sm"
+                onClick={() => doLogin(acc.email, acc.password)}
+                disabled={loading}
+              >
+                <span className={`h-2 w-2 rounded-full shrink-0 ${acc.color}`} />
+                <span className="truncate">{acc.label}</span>
+              </Button>
+            ))}
           </CardContent>
         </Card>
       </div>

@@ -25,28 +25,38 @@ function countWorkdaysUntil(
   return count;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const dateParam = searchParams.get("date");
+
+  // Если передана дата — используем её, иначе сегодня
+  const selectedDate = dateParam ? new Date(dateParam) : new Date();
+  // Нормализуем до полуночи локального времени через UTC
+  const selYear = selectedDate.getUTCFullYear();
+  const selMonth = selectedDate.getUTCMonth();
+  const selDay = selectedDate.getUTCDate();
+
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+  const year = selYear;
+  const month = selMonth;
   const startDate = new Date(Date.UTC(year, month, 1));
   const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
 
-  // Today range (UTC)
-  const todayStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
-  const todayEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  // Выбранный день (range)
+  const dayStart = new Date(Date.UTC(selYear, selMonth, selDay));
+  const dayEnd = new Date(Date.UTC(selYear, selMonth, selDay + 1));
 
   const departmentFilter =
     user.role === "MANAGER" && user.departmentId
       ? { departmentId: user.departmentId }
       : {};
 
-  const [totalEmployees, totalDepartments, timeRecords, todayRecords, departments, allEmployees, holidays] =
+  const [totalEmployees, totalDepartments, timeRecords, dayRecords, departments, allEmployees, holidays] =
     await Promise.all([
       prisma.employee.count({ where: { isActive: true, ...departmentFilter } }),
       prisma.department.count(),
@@ -59,7 +69,7 @@ export async function GET() {
       }),
       prisma.timeRecord.findMany({
         where: {
-          date: { gte: todayStart, lt: todayEnd },
+          date: { gte: dayStart, lt: dayEnd },
           employee: { isActive: true, ...departmentFilter },
         },
         select: { employeeId: true, markType: { select: { code: true } } },
@@ -87,14 +97,14 @@ export async function GET() {
     }
   }
 
-  // Today stats
+  // Selected day stats
   let todayPresent = 0;
   let todayVacation = 0;
   let todaySick = 0;
   let todayAbsent = 0;
-  const todayMarkedEmployees = new Set<string>();
-  for (const rec of todayRecords) {
-    todayMarkedEmployees.add(rec.employeeId);
+  const dayMarkedEmployees = new Set<string>();
+  for (const rec of dayRecords) {
+    dayMarkedEmployees.add(rec.employeeId);
     switch (rec.markType.code) {
       case "Я": todayPresent++; break;
       case "ОТ": todayVacation++; break;
@@ -102,12 +112,12 @@ export async function GET() {
       case "П": todayAbsent++; break;
     }
   }
-  const todayUnmarked = totalEmployees - todayMarkedEmployees.size;
+  const todayUnmarked = totalEmployees - dayMarkedEmployees.size;
 
-  // Per-department attendance rate for current month
-  const workdaysInPeriod = countWorkdaysUntil(year, month, now, holidays);
+  // Per-department attendance rate for month-to-selected-day
+  const refDate = new Date(selYear, selMonth, selDay);
+  const workdaysInPeriod = countWorkdaysUntil(year, month, refDate, holidays);
 
-  // Build dept → employee set
   const deptEmployees = new Map<string, string[]>();
   for (const emp of allEmployees) {
     const arr = deptEmployees.get(emp.departmentId) ?? [];
@@ -115,13 +125,11 @@ export async function GET() {
     deptEmployees.set(emp.departmentId, arr);
   }
 
-  // Build empId → deptId
   const empDept = new Map<string, string>();
   for (const emp of allEmployees) {
     empDept.set(emp.id, emp.departmentId);
   }
 
-  // Count workDays per dept
   const deptWorkDays = new Map<string, number>();
   for (const rec of timeRecords) {
     if (rec.markType.code === "Я") {
@@ -147,23 +155,29 @@ export async function GET() {
   const worstDept = deptRates.length > 0 ? deptRates[0] : null;
   const bestDept = deptRates.length > 1 ? deptRates[deptRates.length - 1] : null;
 
-  // Daily chart: sick (Б) and absent (П) counts per calendar day up to today
+  // Daily chart: sick (Б) and absent (П) counts per calendar day up to selected day
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const todayDay = now.getMonth() === month && now.getFullYear() === year ? now.getDate() : daysInMonth;
-  const dailySick = new Array<number>(todayDay).fill(0);
-  const dailyAbsent = new Array<number>(todayDay).fill(0);
+  const chartLastDay = Math.min(selDay, daysInMonth);
+  const dailySick = new Array<number>(chartLastDay).fill(0);
+  const dailyAbsent = new Array<number>(chartLastDay).fill(0);
   for (const rec of timeRecords) {
     const d = rec.date.getUTCDate();
-    if (d >= 1 && d <= todayDay) {
+    if (d >= 1 && d <= chartLastDay) {
       if (rec.markType.code === "Б") dailySick[d - 1]++;
       if (rec.markType.code === "П") dailyAbsent[d - 1]++;
     }
   }
-  const dailyChart = Array.from({ length: todayDay }, (_, i) => ({
+  const dailyChart = Array.from({ length: chartLastDay }, (_, i) => ({
     day: i + 1,
     sick: dailySick[i],
     absent: dailyAbsent[i],
   }));
+
+  // Является ли выбранная дата "сегодня"
+  const isToday =
+    selYear === now.getFullYear() &&
+    selMonth === now.getMonth() &&
+    selDay === now.getDate();
 
   return NextResponse.json({
     totalEmployees,
@@ -173,16 +187,15 @@ export async function GET() {
     vacationDaysTotal,
     sickDaysTotal,
     absentDaysTotal,
-    // Today
     todayPresent,
     todayVacation,
     todaySick,
     todayAbsent,
     todayUnmarked,
-    // Dept spotlights
     worstDept,
     bestDept,
-    // Daily chart data
     dailyChart,
+    isToday,
+    selectedDate: `${selYear}-${String(selMonth + 1).padStart(2, "0")}-${String(selDay).padStart(2, "0")}`,
   });
 }

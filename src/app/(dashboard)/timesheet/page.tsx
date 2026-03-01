@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { TimesheetFilters } from "@/components/timesheet-filters";
 import { TimesheetGrid } from "@/components/timesheet-grid";
 import { ExportButtons } from "@/components/export-buttons";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { MONTHS } from "@/lib/constants";
 import type { TimesheetRow, MarkTypeOption, DepartmentOption, SessionUser } from "@/types";
@@ -33,6 +34,9 @@ export default function TimesheetPage() {
   const [data, setData] = useState<TimesheetData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Employee search
+  const [employeeSearch, setEmployeeSearch] = useState("");
 
   // Bulk selection state
   const [selectionMode, setSelectionMode] = useState(false);
@@ -219,6 +223,17 @@ export default function TimesheetPage() {
 
   const canEditRows = userRole === "ADMIN" || userRole === "MANAGER";
 
+  const filteredRows = useMemo(() => {
+    if (!data) return [];
+    const q = employeeSearch.trim().toLowerCase();
+    if (!q) return data.rows;
+    return data.rows.filter(
+      (row) =>
+        row.employee.fullName.toLowerCase().includes(q) ||
+        row.employee.personnelNumber.toLowerCase().includes(q)
+    );
+  }, [data, employeeSearch]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -226,10 +241,13 @@ export default function TimesheetPage() {
         <div className="flex items-center gap-2">
           {data && (
             <span className="text-sm text-muted-foreground">
-              {MONTHS[month]} {year} — {data.rows.length}{" "}
-              {data.rows.length === 1
+              {MONTHS[month]} {year} —{" "}
+              {employeeSearch
+                ? `${filteredRows.length} из ${data.rows.length}`
+                : data.rows.length}{" "}
+              {(employeeSearch ? filteredRows.length : data.rows.length) === 1
                 ? "сотрудник"
-                : data.rows.length < 5
+                : (employeeSearch ? filteredRows.length : data.rows.length) < 5
                 ? "сотрудника"
                 : "сотрудников"}
             </span>
@@ -255,6 +273,35 @@ export default function TimesheetPage() {
         onMonthChange={setMonth}
         onDepartmentChange={setDepartmentId}
       />
+
+      <div className="relative max-w-sm">
+        <svg
+          className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          width="15" height="15" viewBox="0 0 15 15" fill="none"
+        >
+          <path
+            d="M10 6.5C10 8.43 8.43 10 6.5 10C4.57 10 3 8.43 3 6.5C3 4.57 4.57 3 6.5 3C8.43 3 10 4.57 10 6.5ZM9.36 10.07C8.62 10.66 7.6 11 6.5 11C4.01 11 2 8.99 2 6.5C2 4.01 4.01 2 6.5 2C8.99 2 11 4.01 11 6.5C11 7.6 10.66 8.62 10.07 9.36L12.85 12.15C13.05 12.34 13.05 12.66 12.85 12.85C12.66 13.05 12.34 13.05 12.15 12.85L9.36 10.07Z"
+            fill="currentColor" fillRule="evenodd" clipRule="evenodd"
+          />
+        </svg>
+        <Input
+          className="pl-8"
+          placeholder="Поиск по сотруднику или табельному №"
+          value={employeeSearch}
+          onChange={(e) => setEmployeeSearch(e.target.value)}
+        />
+        {employeeSearch && (
+          <button
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            onClick={() => setEmployeeSearch("")}
+            type="button"
+          >
+            <svg width="13" height="13" viewBox="0 0 15 15" fill="none">
+              <path d="M11.78 4.22a.75.75 0 0 0-1.06-1.06L7.5 6.44 4.28 3.16a.75.75 0 0 0-1.06 1.06L6.44 7.5l-3.22 3.22a.75.75 0 1 0 1.06 1.06L7.5 8.56l3.22 3.22a.75.75 0 1 0 1.06-1.06L8.56 7.5l3.22-3.28Z" fill="currentColor"/>
+            </svg>
+          </button>
+        )}
+      </div>
 
       {loading && (
         <div className="flex items-center justify-center py-16 text-muted-foreground text-sm">
@@ -315,7 +362,7 @@ export default function TimesheetPage() {
           </div>
 
           <TimesheetGrid
-            rows={data.rows}
+            rows={filteredRows}
             markTypes={data.markTypes}
             holidays={data.holidays}
             daysInMonth={data.daysInMonth}

@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   CalendarDays, Users, BarChart3, CheckSquare, Plane, HeartPulse,
   TrendingUp, TrendingDown, AlertTriangle, UserCheck, Clock,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -37,6 +39,15 @@ interface DashboardStats {
   worstDept: DeptSpotlight | null;
   bestDept: DeptSpotlight | null;
   dailyChart: DailyPoint[];
+  isToday: boolean;
+  selectedDate: string;
+}
+
+function formatLocalDate(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function RateBar({ rate }: { rate: number }) {
@@ -57,7 +68,7 @@ function RateBar({ rate }: { rate: number }) {
   );
 }
 
-function SparklineChart({ data }: { data: DailyPoint[] }) {
+function SparklineChart({ data, highlightDay }: { data: DailyPoint[]; highlightDay: number }) {
   if (!data || data.length === 0) return null;
 
   const W = 560;
@@ -82,10 +93,13 @@ function SparklineChart({ data }: { data: DailyPoint[] }) {
     return <polygon points={`${pts} ${base}`} fill={color} fillOpacity={0.12} />;
   };
 
-  // Y axis ticks
   const ticks = maxVal <= 4
     ? Array.from({ length: maxVal + 1 }, (_, i) => i)
     : [0, Math.round(maxVal / 2), maxVal];
+
+  // Highlight line for selected day
+  const hlIdx = data.findIndex((d) => d.day === highlightDay);
+  const hlX = hlIdx >= 0 ? toX(hlIdx) : null;
 
   return (
     <svg
@@ -93,7 +107,6 @@ function SparklineChart({ data }: { data: DailyPoint[] }) {
       style={{ width: "100%", height: H }}
       aria-label="График больничных и прогулов по дням"
     >
-      {/* Grid lines */}
       {ticks.map((t) => (
         <g key={t}>
           <line
@@ -105,11 +118,18 @@ function SparklineChart({ data }: { data: DailyPoint[] }) {
         </g>
       ))}
 
-      {/* Areas */}
+      {/* Vertical line for selected day */}
+      {hlX !== null && (
+        <line
+          x1={hlX} x2={hlX}
+          y1={PAD.top} y2={PAD.top + chartH}
+          stroke="#6366f1" strokeWidth={1.5} strokeDasharray="3 2"
+        />
+      )}
+
       {area((d) => d.sick, "#ef4444")}
       {area((d) => d.absent, "#f59e0b")}
 
-      {/* Lines */}
       <polyline
         points={polyline((d) => d.sick)}
         fill="none" stroke="#ef4444" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"
@@ -119,17 +139,15 @@ function SparklineChart({ data }: { data: DailyPoint[] }) {
         fill="none" stroke="#f59e0b" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"
       />
 
-      {/* X axis day labels — show every 5th */}
       {data.map((d, i) => {
         if (n > 15 && d.day % 5 !== 0 && d.day !== 1) return null;
         return (
-          <text key={i} x={toX(i)} y={H - 4} textAnchor="middle" fontSize={9} fill="#9ca3af">
+          <text key={i} x={toX(i)} y={H - 4} textAnchor="middle" fontSize={9} fill={d.day === highlightDay ? "#6366f1" : "#9ca3af"}>
             {d.day}
           </text>
         );
       })}
 
-      {/* Dots for non-zero values */}
       {data.map((d, i) => (
         <g key={i}>
           {d.sick > 0 && (
@@ -144,25 +162,49 @@ function SparklineChart({ data }: { data: DailyPoint[] }) {
   );
 }
 
-export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+const DAY_NAMES_SHORT = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const MONTHS_RU = [
+  "января","февраля","марта","апреля","мая","июня",
+  "июля","августа","сентября","октября","ноября","декабря",
+];
 
-  useEffect(() => {
-    fetch("/api/dashboard")
+export default function DashboardPage() {
+  const today = new Date();
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStats = useCallback((date: Date) => {
+    setLoading(true);
+    const iso = formatLocalDate(date);
+    fetch(`/api/dashboard?date=${iso}`)
       .then((r) => r.json())
-      .then((data) => setStats(data))
-      .catch(() => {});
+      .then((data) => { setStats(data); setLoading(false); })
+      .catch(() => setLoading(false));
   }, []);
 
-  const val = (n: number | undefined) =>
-    stats === null ? "–" : String(n ?? 0);
+  useEffect(() => {
+    fetchStats(selectedDate);
+  }, [selectedDate, fetchStats]);
 
-  const todayDate = new Date();
-  const todayLabel = todayDate.toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
-    weekday: "long",
-  });
+  const goDay = (delta: number) => {
+    setSelectedDate((prev) => {
+      const d = new Date(prev);
+      d.setDate(d.getDate() + delta);
+      // Не уходим в будущее
+      if (d > today) return prev;
+      return d;
+    });
+  };
+
+  const isToday = formatLocalDate(selectedDate) === formatLocalDate(today);
+
+  const val = (n: number | undefined) => (loading || stats === null ? "–" : String(n ?? 0));
+
+  const dayName = DAY_NAMES_SHORT[selectedDate.getDay()];
+  const dateLabel = `${dayName}, ${selectedDate.getDate()} ${MONTHS_RU[selectedDate.getMonth()]} ${selectedDate.getFullYear()}`;
+
+  const selDay = selectedDate.getDate();
 
   return (
     <div className="space-y-6">
@@ -173,13 +215,61 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Today stats */}
+      {/* Date selector */}
+      <div className="flex items-center gap-2">
+        <Button variant="outline" size="icon" onClick={() => goDay(-1)}>
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`text-sm font-medium capitalize ${loading ? "text-muted-foreground" : ""}`}>
+            {isToday ? `Сегодня — ${dateLabel}` : dateLabel}
+          </span>
+          {!isToday && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground h-6 px-2"
+              onClick={() => setSelectedDate(today)}
+            >
+              Вернуться к сегодня
+            </Button>
+          )}
+        </div>
+
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => goDay(1)}
+          disabled={isToday}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+
+        <input
+          type="date"
+          max={formatLocalDate(today)}
+          value={formatLocalDate(selectedDate)}
+          onChange={(e) => {
+            if (!e.target.value) return;
+            const d = new Date(e.target.value + "T00:00:00");
+            if (d <= today) setSelectedDate(d);
+          }}
+          className="ml-1 h-9 rounded-md border border-input bg-background px-3 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+      </div>
+
+      {/* Day stats */}
       <div>
-        <p className="text-sm font-medium text-muted-foreground mb-3 capitalize">{todayLabel}</p>
+        <p className="text-sm font-medium text-muted-foreground mb-3">
+          {isToday ? "На месте сегодня" : `Отметки за ${selectedDate.getDate()} ${MONTHS_RU[selectedDate.getMonth()]}`}
+        </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-              <CardTitle className="text-sm font-medium">На месте сегодня</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {isToday ? "На месте сегодня" : "Явка"}
+              </CardTitle>
               <UserCheck className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
@@ -290,9 +380,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Daily chart + dept spotlights side by side */}
+      {/* Daily chart + dept spotlights */}
       <div className="grid gap-4 lg:grid-cols-3">
-        {/* Chart */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">
@@ -307,11 +396,15 @@ export default function DashboardPage() {
                 <span className="inline-block w-3 h-0.5 bg-amber-500 rounded" />
                 Прогулы (П)
               </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-0.5 rounded" style={{ background: "#6366f1", borderTop: "1px dashed #6366f1" }} />
+                Выбранный день
+              </span>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
             {stats ? (
-              <SparklineChart data={stats.dailyChart} />
+              <SparklineChart data={stats.dailyChart} highlightDay={selDay} />
             ) : (
               <div className="h-[100px] flex items-center justify-center text-sm text-muted-foreground">
                 Загрузка...
@@ -320,7 +413,6 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Dept spotlights */}
         <div className="flex flex-col gap-4">
           {stats?.worstDept && (
             <Card className="border-orange-200 flex-1">
