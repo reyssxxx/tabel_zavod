@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSession } from "next-auth/react";
-import type { EmployeeWithDepartment, DepartmentOption, WorkScheduleOption, SessionUser } from "@/types";
+import type { EmployeeWithDepartment, DepartmentOption, WorkScheduleOption, PositionOption, SessionUser } from "@/types";
 
 interface EmployeeFormProps {
   employee?: EmployeeWithDepartment;
@@ -44,6 +44,11 @@ export function EmployeeForm({
   );
   const [searchResults, setSearchResults] = useState<EmployeeWithDepartment[]>([]);
   const [schedules, setSchedules] = useState<WorkScheduleOption[]>([]);
+  const [positions, setPositions] = useState<PositionOption[]>([]);
+  const [positionId, setPositionId] = useState(employee?.positionRef?.id ?? "none");
+  const [hireDate, setHireDate] = useState(
+    employee?.hireDate ? new Date(employee.hireDate).toISOString().slice(0, 10) : ""
+  );
   const [loading, setLoading] = useState(false);
 
   const isEditing = !!employee;
@@ -53,6 +58,10 @@ export function EmployeeForm({
     fetch("/api/settings/schedules")
       .then((r) => r.json())
       .then(setSchedules)
+      .catch(() => {});
+    fetch("/api/settings/positions")
+      .then((r) => r.json())
+      .then(setPositions)
       .catch(() => {});
   }, []);
 
@@ -98,7 +107,9 @@ export function EmployeeForm({
           departmentId,
           personnelNumber: personnelNumber.trim(),
           scheduleId: scheduleId === "none" ? null : scheduleId,
+          positionId: positionId === "none" ? null : positionId,
           linkedEmployeeId: linkedEmployee?.id ?? null,
+          hireDate: hireDate || null,
         }),
       });
 
@@ -184,6 +195,51 @@ export function EmployeeForm({
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="positionRef">Должность (для расчёта ЗП)</Label>
+        <Select value={positionId} onValueChange={setPositionId}>
+          <SelectTrigger id="positionRef">
+            <SelectValue placeholder="Не задана" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">Не задана</SelectItem>
+            {positions.map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name} — {p.baseSalary.toLocaleString("ru-RU")} ₽
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="hireDate">Дата приёма на работу</Label>
+        <input
+          id="hireDate"
+          type="date"
+          value={hireDate}
+          onChange={(e) => setHireDate(e.target.value)}
+          className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        />
+        {hireDate && (
+          <p className="text-xs text-muted-foreground">
+            Стаж на сегодня:{" "}
+            {(() => {
+              const hire = new Date(hireDate);
+              const now = new Date();
+              const years = now.getFullYear() - hire.getFullYear();
+              const hadAnniversary =
+                now.getMonth() > hire.getMonth() ||
+                (now.getMonth() === hire.getMonth() && now.getDate() >= hire.getDate());
+              const eff = hadAnniversary ? years : years - 1;
+              if (eff < 5) return `${Math.max(0, eff)} л. — 60% больничного`;
+              if (eff < 8) return `${eff} л. — 80% больничного`;
+              return `${eff} л. — 100% больничного`;
+            })()}
+          </p>
+        )}
       </div>
 
       {isAdmin && (

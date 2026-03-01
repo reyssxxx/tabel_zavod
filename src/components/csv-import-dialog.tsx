@@ -157,9 +157,20 @@ export function CsvImportDialog({
         {step === "upload" && (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Загрузите CSV файл с колонками: <strong>ФИО, Должность, Подразделение, Табельный номер</strong>.
-              Разделитель — запятая или точка с запятой. Кодировка — UTF-8.
+              Загрузите CSV файл. Разделитель — запятая или точка с запятой. Кодировка — UTF-8.
             </p>
+            <div className="rounded-md bg-muted px-3 py-2 text-xs space-y-1">
+              <p className="font-medium">Обязательные колонки:</p>
+              <p className="text-muted-foreground">ФИО, Должность, Подразделение, Табельный номер</p>
+              <p className="font-medium mt-1">Необязательные колонки:</p>
+              <p className="text-muted-foreground">
+                <strong>График работы</strong> — название графика из справочника (например: «8-часовой», «2/2 (12ч)»).
+                Если указан неверно — строка пропускается.
+              </p>
+              <p className="text-muted-foreground mt-0.5">
+                Должность будет автоматически связана с окладом, если название совпадает с должностью в справочнике.
+              </p>
+            </div>
             <div
               className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:bg-muted/30 transition-colors"
               onClick={() => inputRef.current?.click()}

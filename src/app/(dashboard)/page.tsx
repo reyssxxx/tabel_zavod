@@ -2,8 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, Users, BarChart3, CheckSquare, Plane, HeartPulse } from "lucide-react";
+import {
+  CalendarDays, Users, BarChart3, CheckSquare, Plane, HeartPulse,
+  TrendingUp, TrendingDown, AlertTriangle, UserCheck, Clock,
+} from "lucide-react";
 import Link from "next/link";
+
+interface DeptSpotlight {
+  id: string;
+  name: string;
+  rate: number;
+  employeeCount: number;
+}
+
+interface DailyPoint {
+  day: number;
+  sick: number;
+  absent: number;
+}
 
 interface DashboardStats {
   totalEmployees: number;
@@ -13,6 +29,119 @@ interface DashboardStats {
   vacationDaysTotal: number;
   sickDaysTotal: number;
   absentDaysTotal: number;
+  todayPresent: number;
+  todayVacation: number;
+  todaySick: number;
+  todayAbsent: number;
+  todayUnmarked: number;
+  worstDept: DeptSpotlight | null;
+  bestDept: DeptSpotlight | null;
+  dailyChart: DailyPoint[];
+}
+
+function RateBar({ rate }: { rate: number }) {
+  const color = rate >= 90 ? "#22c55e" : rate >= 70 ? "#f59e0b" : "#ef4444";
+  return (
+    <div className="mt-2">
+      <div className="flex justify-between text-xs mb-1">
+        <span style={{ color }} className="font-semibold">{rate}%</span>
+        <span className="text-muted-foreground">явки</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${Math.min(100, rate)}%`, backgroundColor: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SparklineChart({ data }: { data: DailyPoint[] }) {
+  if (!data || data.length === 0) return null;
+
+  const W = 560;
+  const H = 100;
+  const PAD = { top: 8, right: 8, bottom: 20, left: 28 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const maxVal = Math.max(1, ...data.map((d) => Math.max(d.sick, d.absent)));
+  const n = data.length;
+  const step = chartW / Math.max(1, n - 1);
+
+  const toX = (i: number) => PAD.left + i * step;
+  const toY = (v: number) => PAD.top + chartH - (v / maxVal) * chartH;
+
+  const polyline = (getter: (d: DailyPoint) => number) =>
+    data.map((d, i) => `${toX(i).toFixed(1)},${toY(getter(d)).toFixed(1)}`).join(" ");
+
+  const area = (getter: (d: DailyPoint) => number, color: string) => {
+    const pts = data.map((d, i) => `${toX(i).toFixed(1)},${toY(getter(d)).toFixed(1)}`).join(" ");
+    const base = `${toX(n - 1).toFixed(1)},${(PAD.top + chartH).toFixed(1)} ${toX(0).toFixed(1)},${(PAD.top + chartH).toFixed(1)}`;
+    return <polygon points={`${pts} ${base}`} fill={color} fillOpacity={0.12} />;
+  };
+
+  // Y axis ticks
+  const ticks = maxVal <= 4
+    ? Array.from({ length: maxVal + 1 }, (_, i) => i)
+    : [0, Math.round(maxVal / 2), maxVal];
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      style={{ width: "100%", height: H }}
+      aria-label="График больничных и прогулов по дням"
+    >
+      {/* Grid lines */}
+      {ticks.map((t) => (
+        <g key={t}>
+          <line
+            x1={PAD.left} x2={W - PAD.right}
+            y1={toY(t)} y2={toY(t)}
+            stroke="#e5e7eb" strokeWidth={1}
+          />
+          <text x={PAD.left - 4} y={toY(t) + 4} textAnchor="end" fontSize={9} fill="#9ca3af">{t}</text>
+        </g>
+      ))}
+
+      {/* Areas */}
+      {area((d) => d.sick, "#ef4444")}
+      {area((d) => d.absent, "#f59e0b")}
+
+      {/* Lines */}
+      <polyline
+        points={polyline((d) => d.sick)}
+        fill="none" stroke="#ef4444" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"
+      />
+      <polyline
+        points={polyline((d) => d.absent)}
+        fill="none" stroke="#f59e0b" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round"
+      />
+
+      {/* X axis day labels — show every 5th */}
+      {data.map((d, i) => {
+        if (n > 15 && d.day % 5 !== 0 && d.day !== 1) return null;
+        return (
+          <text key={i} x={toX(i)} y={H - 4} textAnchor="middle" fontSize={9} fill="#9ca3af">
+            {d.day}
+          </text>
+        );
+      })}
+
+      {/* Dots for non-zero values */}
+      {data.map((d, i) => (
+        <g key={i}>
+          {d.sick > 0 && (
+            <circle cx={toX(i)} cy={toY(d.sick)} r={2.5} fill="#ef4444" />
+          )}
+          {d.absent > 0 && (
+            <circle cx={toX(i)} cy={toY(d.absent)} r={2.5} fill="#f59e0b" />
+          )}
+        </g>
+      ))}
+    </svg>
+  );
 }
 
 export default function DashboardPage() {
@@ -28,6 +157,13 @@ export default function DashboardPage() {
   const val = (n: number | undefined) =>
     stats === null ? "–" : String(n ?? 0);
 
+  const todayDate = new Date();
+  const todayLabel = todayDate.toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    weekday: "long",
+  });
+
   return (
     <div className="space-y-6">
       <div>
@@ -37,10 +173,71 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Stat cards */}
+      {/* Today stats */}
+      <div>
+        <p className="text-sm font-medium text-muted-foreground mb-3 capitalize">{todayLabel}</p>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">На месте сегодня</CardTitle>
+              <UserCheck className="h-4 w-4 text-green-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-green-600">{val(stats?.todayPresent)}</div>
+              <p className="text-xs text-muted-foreground mt-1">сотрудников (Я)</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">В отпуске</CardTitle>
+              <Plane className="h-4 w-4 text-indigo-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{val(stats?.todayVacation)}</div>
+              <p className="text-xs text-muted-foreground mt-1">сотрудников (ОТ)</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">На больничном</CardTitle>
+              <HeartPulse className="h-4 w-4 text-red-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{val(stats?.todaySick)}</div>
+              <p className="text-xs text-muted-foreground mt-1">сотрудников (Б)</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">Прогулы</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-orange-600">{val(stats?.todayAbsent)}</div>
+              <p className="text-xs text-muted-foreground mt-1">сотрудников (П)</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">Не заполнено</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-muted-foreground">{val(stats?.todayUnmarked)}</div>
+              <p className="text-xs text-muted-foreground mt-1">без отметки</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Month totals */}
       <div>
         <p className="text-sm font-medium text-muted-foreground mb-3">
-          {stats?.currentMonth ?? "Текущий месяц"}
+          {stats?.currentMonth ?? "Текущий месяц"} — итоги
         </p>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card>
@@ -90,6 +287,74 @@ export default function DashboardPage() {
               </p>
             </CardContent>
           </Card>
+        </div>
+      </div>
+
+      {/* Daily chart + dept spotlights side by side */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">
+              Больничные и прогулы по дням — {stats?.currentMonth ?? "текущий месяц"}
+            </CardTitle>
+            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-0.5 bg-red-500 rounded" />
+                Больничные (Б)
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-3 h-0.5 bg-amber-500 rounded" />
+                Прогулы (П)
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {stats ? (
+              <SparklineChart data={stats.dailyChart} />
+            ) : (
+              <div className="h-[100px] flex items-center justify-center text-sm text-muted-foreground">
+                Загрузка...
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Dept spotlights */}
+        <div className="flex flex-col gap-4">
+          {stats?.worstDept && (
+            <Card className="border-orange-200 flex-1">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Требует внимания</CardTitle>
+                <TrendingDown className="h-4 w-4 text-orange-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="font-semibold text-base truncate">{stats.worstDept.name}</div>
+                <p className="text-xs text-muted-foreground">{stats.worstDept.employeeCount} чел.</p>
+                <RateBar rate={stats.worstDept.rate} />
+              </CardContent>
+            </Card>
+          )}
+
+          {stats?.bestDept && (
+            <Card className="border-green-200 flex-1">
+              <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+                <CardTitle className="text-sm font-medium">Лучший результат</CardTitle>
+                <TrendingUp className="h-4 w-4 text-green-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="font-semibold text-base truncate">{stats.bestDept.name}</div>
+                <p className="text-xs text-muted-foreground">{stats.bestDept.employeeCount} чел.</p>
+                <RateBar rate={stats.bestDept.rate} />
+              </CardContent>
+            </Card>
+          )}
+
+          {!stats && (
+            <Card className="flex-1 flex items-center justify-center text-sm text-muted-foreground p-4">
+              Загрузка...
+            </Card>
+          )}
         </div>
       </div>
 

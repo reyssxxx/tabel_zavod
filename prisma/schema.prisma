@@ -12,7 +12,7 @@ model User {
   email        String      @unique
   passwordHash String
   name         String
-  role         String      @default("MANAGER") // ADMIN, MANAGER, ACCOUNTANT
+  role         String      @default("MANAGER") // ADMIN, MANAGER, ACCOUNTANT, HR
   departmentId String?
   department   Department? @relation(fields: [departmentId], references: [id])
 }
@@ -31,6 +31,18 @@ model WorkSchedule {
   employees   Employee[]
 }
 
+model Position {
+  id         String     @id @default(cuid())
+  name       String     @unique
+  baseSalary Float
+  employees  Employee[]
+}
+
+model AppSettings {
+  key   String @id
+  value String
+}
+
 model Employee {
   id               String        @id @default(cuid())
   fullName         String
@@ -41,6 +53,9 @@ model Employee {
   isActive         Boolean       @default(true)
   scheduleId       String?
   schedule         WorkSchedule? @relation(fields: [scheduleId], references: [id])
+  positionId       String?
+  positionRef      Position?     @relation(fields: [positionId], references: [id])
+  hireDate         DateTime?     // дата приёма на работу (для расчёта стажа и % больничного)
   linkedEmployeeId String?
   linkedEmployee   Employee?     @relation("EmployeeLink", fields: [linkedEmployeeId], references: [id])
   linkedBy         Employee[]    @relation("EmployeeLink")
@@ -64,7 +79,8 @@ model TimeRecord {
   markTypeId    String
   markType      MarkType @relation(fields: [markTypeId], references: [id])
   overtimeHours Float    @default(0)
-  slot          Int      @default(0) // 0 = основная отметка, 1 = вторая (полдня)
+  actualHours   Float?              // null = полный день по графику; число = фактически отработано (напр. 2, 6)
+  slot          Int      @default(0) // 0 = основная отметка, 1 = вторая (полдня совместителя)
 
   @@unique([employeeId, date, slot])
 }
@@ -74,4 +90,20 @@ model Holiday {
   date        DateTime @unique
   name        String
   isShortened Boolean  @default(false)
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  entityType String   // "TIMERECORD" | "EMPLOYEE" | "EMPLOYEE_IMPORT"
+  action     String   // "CREATE" | "UPDATE" | "DELETE"
+  entityId   String
+  userId     String
+  userName   String
+  userRole   String
+  details    String   // JSON строка
+  createdAt  DateTime @default(now())
+
+  @@index([entityType])
+  @@index([userId])
+  @@index([createdAt])
 }

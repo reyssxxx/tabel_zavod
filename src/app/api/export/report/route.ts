@@ -136,6 +136,9 @@ export async function GET(request: NextRequest) {
       attendanceRate,
       workdaysInPeriod,
       unmarkedDays,
+      totalSalary: 0,
+      avgSalary: 0,
+      salaryEmployeeCount: 0,
     };
   });
 

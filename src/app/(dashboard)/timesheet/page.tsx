@@ -5,8 +5,9 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import { TimesheetFilters } from "@/components/timesheet-filters";
 import { TimesheetGrid } from "@/components/timesheet-grid";
+import { ExportButtons } from "@/components/export-buttons";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { MONTHS } from "@/lib/constants";
 import type { TimesheetRow, MarkTypeOption, DepartmentOption, SessionUser } from "@/types";
 
@@ -86,55 +87,58 @@ export default function TimesheetPage() {
   }, [fetchData, userRole]);
 
   const handleCellUpdate = useCallback(
-    async (employeeId: string, day: number, markTypeId: string | null) => {
+    async (employeeId: string, day: number, markTypeId: string | null, slot = 0, overtimeHours = 0, actualHours: number | null = null) => {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
-      // Optimistic update
-      setData((prev) => {
-        if (!prev) return prev;
-        const newRows = prev.rows.map((row) => {
-          if (row.employee.id !== employeeId) return row;
-
-          const oldRecord = row.records[day] ?? null;
-          const newRecords = { ...row.records };
-
-          if (markTypeId === null) {
-            delete newRecords[day];
-            const oldMarkType = oldRecord
-              ? prev.markTypes.find((m) => m.id === oldRecord.markTypeId)
-              : null;
-            return {
-              ...row,
-              records: newRecords,
-              totalDays: row.totalDays - (oldRecord ? 1 : 0),
-              totalHours: row.totalHours - (oldMarkType?.defaultHours ?? 0),
-            };
-          } else {
-            const markType = prev.markTypes.find((m) => m.id === markTypeId);
-            if (!markType) return row;
-            const oldMarkType = oldRecord
-              ? prev.markTypes.find((m) => m.id === oldRecord.markTypeId)
-              : null;
-            newRecords[day] = {
-              employeeId,
-              date: dateStr,
-              markTypeId,
-              markCode: markType.code,
-              markColor: markType.color,
-            };
-            return {
-              ...row,
-              records: newRecords,
-              totalDays: row.totalDays + (oldRecord ? 0 : 1),
-              totalHours:
-                row.totalHours - (oldMarkType?.defaultHours ?? 0) + markType.defaultHours,
-            };
-          }
+      // Optimistic update (only for slot=0 primary)
+      if (slot === 0) {
+        setData((prev) => {
+          if (!prev) return prev;
+          const newRows = prev.rows.map((row) => {
+            if (row.employee.id !== employeeId) return row;
+            const oldRecord = row.records[day] ?? null;
+            const newRecords = { ...row.records };
+            if (markTypeId === null) {
+              delete newRecords[day];
+              const oldMarkType = oldRecord
+                ? prev.markTypes.find((m) => m.id === oldRecord.markTypeId)
+                : null;
+              return {
+                ...row,
+                records: newRecords,
+                totalDays: row.totalDays - (oldRecord ? 1 : 0),
+                totalHours: row.totalHours - (oldMarkType?.defaultHours ?? 0),
+                totalOvertimeHours: row.totalOvertimeHours - (oldRecord?.overtimeHours ?? 0),
+              };
+            } else {
+              const markType = prev.markTypes.find((m) => m.id === markTypeId);
+              if (!markType) return row;
+              const oldMarkType = oldRecord
+                ? prev.markTypes.find((m) => m.id === oldRecord.markTypeId)
+                : null;
+              const schedHours = row.employee.schedule?.hoursPerDay ?? markType.defaultHours;
+              const effectiveHours = actualHours ?? schedHours;
+              newRecords[day] = {
+                employeeId, date: dateStr, markTypeId,
+                markCode: markType.code, markColor: markType.color,
+                overtimeHours, actualHours, slot: 0,
+              };
+              const oldHours = oldRecord ? (oldRecord.actualHours ?? (row.employee.schedule?.hoursPerDay ?? (oldMarkType?.defaultHours ?? 0))) : 0;
+              return {
+                ...row,
+                records: newRecords,
+                totalDays: row.totalDays + (oldRecord ? 0 : 1),
+                totalHours: row.totalHours - oldHours + effectiveHours,
+                totalOvertimeHours: row.totalOvertimeHours - (oldRecord?.overtimeHours ?? 0) + overtimeHours,
+              };
+            }
+          });
+          return { ...prev, rows: newRows };
         });
-        return { ...prev, rows: newRows };
-      });
+      } else {
+        // For slot=1 just refresh after server response
+      }
 
-      // Отправляем запрос на сервер
       try {
         const res = await fetch("/api/timerecords", {
           method: "PUT",
@@ -143,9 +147,15 @@ export default function TimesheetPage() {
             employeeId,
             date: `${dateStr}T00:00:00.000Z`,
             markTypeId,
+            slot,
+            overtimeHours,
+            actualHours,
           }),
         });
         if (!res.ok) {
+          fetchData();
+        } else if (slot === 1) {
+          // Refresh to show secondary record properly
           fetchData();
         }
       } catch {
@@ -175,12 +185,13 @@ export default function TimesheetPage() {
   const handleBulkApply = useCallback(async () => {
     if (!bulkMarkTypeId || selectedCells.size === 0 || !data) return;
     setBulkApplying(true);
+    const isClear = bulkMarkTypeId === "clear";
     try {
       const records = Array.from(selectedCells).map((key) => {
         const [employeeId, dayStr] = key.split(":");
         const day = parseInt(dayStr);
         const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-        return { employeeId, date: `${dateStr}T00:00:00.000Z`, markTypeId: bulkMarkTypeId };
+        return { employeeId, date: `${dateStr}T00:00:00.000Z`, markTypeId: isClear ? null : bulkMarkTypeId };
       });
 
       const res = await fetch("/api/timerecords/bulk", {
@@ -196,7 +207,7 @@ export default function TimesheetPage() {
       }
 
       const { updated } = await res.json();
-      toast.success(`Обновлено записей: ${updated}`);
+      toast.success(isClear ? `Очищено ячеек: ${updated}` : `Обновлено записей: ${updated}`);
       handleExitSelectionMode();
       fetchData();
     } catch {
@@ -223,16 +234,13 @@ export default function TimesheetPage() {
                 : "сотрудников"}
             </span>
           )}
-          {canEditRows && !loading && data && (
-            selectionMode ? (
-              <Button variant="outline" size="sm" onClick={handleExitSelectionMode}>
-                Отмена выбора
-              </Button>
-            ) : (
-              <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
-                Выбрать ячейки
-              </Button>
-            )
+          {!loading && data && (
+            <ExportButtons
+              year={year}
+              month={month}
+              departmentId={departmentId}
+              type="timesheet"
+            />
           )}
         </div>
       </div>
@@ -262,8 +270,8 @@ export default function TimesheetPage() {
 
       {!loading && !error && data && (
         <>
-          {/* Легенда типов отметок */}
-          <div className="flex flex-wrap gap-2">
+          {/* Легенда типов отметок + кнопка выбора ячеек */}
+          <div className="flex flex-wrap items-center gap-2">
             {data.markTypes.map((mt) => (
               <span
                 key={mt.id}
@@ -291,6 +299,19 @@ export default function TimesheetPage() {
                 Режим выбора: кликайте по ячейкам
               </span>
             )}
+            {canEditRows && (
+              <div className="ml-auto">
+                {selectionMode ? (
+                  <Button variant="outline" size="sm" onClick={handleExitSelectionMode}>
+                    Отмена выбора
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
+                    Выбрать ячейки
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           <TimesheetGrid
@@ -316,7 +337,7 @@ export default function TimesheetPage() {
               <div className="flex-1" />
               <Select value={bulkMarkTypeId} onValueChange={setBulkMarkTypeId}>
                 <SelectTrigger className="w-48">
-                  <SelectValue placeholder="Выберите тип..." />
+                  <SelectValue placeholder="Выберите действие..." />
                 </SelectTrigger>
                 <SelectContent>
                   {data.markTypes.map((mt) => (
@@ -335,14 +356,22 @@ export default function TimesheetPage() {
                       </span>
                     </SelectItem>
                   ))}
+                  <SelectSeparator />
+                  <SelectItem value="clear">
+                    <span className="flex items-center gap-2 text-destructive">
+                      <span style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", backgroundColor: "#ef4444" }} />
+                      Очистить ячейки
+                    </span>
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <Button
                 size="sm"
                 onClick={handleBulkApply}
                 disabled={!bulkMarkTypeId || bulkApplying}
+                variant={bulkMarkTypeId === "clear" ? "destructive" : "default"}
               >
-                {bulkApplying ? "Применение..." : "Применить"}
+                {bulkApplying ? "Применение..." : bulkMarkTypeId === "clear" ? "Очистить" : "Применить"}
               </Button>
               <Button
                 size="sm"

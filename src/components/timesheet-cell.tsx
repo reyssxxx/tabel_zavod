@@ -1,109 +1,119 @@
 "use client";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { useRef } from "react";
 import type { TimeRecordData, MarkTypeOption } from "@/types";
 
-interface TimesheetCellProps {
+export interface CellClickInfo {
+  rect: DOMRect;
+  employeeId: string;
+  day: number;
   value: TimeRecordData | null;
+  secondaryValue: TimeRecordData | null | undefined;
+}
+
+interface TimesheetCellProps {
+  employeeId: string;
+  day: number;
+  value: TimeRecordData | null;
+  secondaryValue?: TimeRecordData | null;
   markTypes: MarkTypeOption[];
   canEdit: boolean;
   isWeekend: boolean;
   isHoliday: boolean;
   isShortened: boolean;
   isSelected?: boolean;
-  onSelect: (markTypeId: string | null) => void;
+  onOpen: (info: CellClickInfo) => void;
 }
 
 export function TimesheetCell({
+  employeeId,
+  day,
   value,
-  markTypes,
+  secondaryValue,
   canEdit,
   isWeekend,
   isHoliday,
   isShortened,
   isSelected = false,
-  onSelect,
+  onOpen,
 }: TimesheetCellProps) {
+  const cellRef = useRef<HTMLTableCellElement>(null);
+
+  const bg = value?.markColor
+    ? value.markColor + "33"
+    : isHoliday ? "#fff7ed"
+    : isShortened ? "#fefce8"
+    : isWeekend ? "#f3f4f6"
+    : undefined;
+
   const cellStyle: React.CSSProperties = {
-    minWidth: 36,
-    width: 36,
-    height: 36,
-    textAlign: "center",
-    verticalAlign: "middle",
-    padding: 0,
-    fontSize: 12,
-    fontWeight: 500,
+    minWidth: 36, width: 36, height: 36,
+    textAlign: "center", verticalAlign: "middle",
+    padding: 0, fontSize: 11, fontWeight: 500,
     cursor: canEdit ? "pointer" : "default",
     border: isSelected ? "2px solid #3b82f6" : "1px solid #e5e7eb",
-    position: "relative",
-    boxSizing: "border-box",
+    position: "relative", boxSizing: "border-box",
+    backgroundColor: bg,
   };
 
-  // Определяем фоновый цвет
-  if (value?.markColor) {
-    cellStyle.backgroundColor = `${value.markColor}33`;
-  } else if (isHoliday) {
-    cellStyle.backgroundColor = "#fff7ed"; // bg-orange-50
-  } else if (isShortened) {
-    cellStyle.backgroundColor = "#fefce8"; // bg-yellow-50
-  } else if (isWeekend) {
-    cellStyle.backgroundColor = "#f3f4f6"; // bg-gray-100
-  }
+  const hasOvertime = (value?.overtimeHours ?? 0) > 0;
 
-  const content = (
-    <td style={cellStyle}>
-      {value?.markCode ?? (isHoliday || isWeekend ? "" : "")}
-    </td>
-  );
+  const renderContent = () => {
+    if (secondaryValue) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+          <div style={{
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10, borderBottom: "1px solid #e5e7eb",
+            backgroundColor: value?.markColor ? value.markColor + "33" : undefined,
+          }}>
+            {value?.markCode ?? ""}
+          </div>
+          <div style={{
+            flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10,
+            backgroundColor: secondaryValue.markColor ? secondaryValue.markColor + "33" : undefined,
+          }}>
+            {secondaryValue.markCode}
+          </div>
+        </div>
+      );
+    }
+    const hasPartial = value?.actualHours != null;
+    return (
+      <span style={{ display: "block", position: "relative", lineHeight: hasPartial ? "1.1" : "34px" }}>
+        {hasPartial ? (
+          <span style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: 34 }}>
+            <span>{value?.markCode ?? ""}</span>
+            <span style={{ fontSize: 9, color: "#b45309", fontWeight: 600 }}>{value!.actualHours}ч</span>
+          </span>
+        ) : (
+          value?.markCode ?? ""
+        )}
+        {hasOvertime && (
+          <span style={{
+            position: "absolute", top: 2, right: 2, width: 5, height: 5,
+            borderRadius: "50%", backgroundColor: "#ef4444",
+          }} title={"СВ: " + value!.overtimeHours + "ч"} />
+        )}
+      </span>
+    );
+  };
 
   if (!canEdit) {
-    return content;
+    return <td style={cellStyle}>{renderContent()}</td>;
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <td style={{ ...cellStyle, outline: "none" }}>
-          <span style={{ display: "block", lineHeight: "36px" }}>
-            {value?.markCode ?? ""}
-          </span>
-        </td>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-52">
-        {markTypes.map((mt) => (
-          <DropdownMenuItem
-            key={mt.id}
-            onClick={() => onSelect(mt.id)}
-            className="gap-2 cursor-pointer"
-          >
-            <span
-              style={{
-                display: "inline-block",
-                width: 8,
-                height: 8,
-                borderRadius: "50%",
-                backgroundColor: mt.color,
-                flexShrink: 0,
-              }}
-            />
-            <span className="font-mono font-semibold text-xs w-6">{mt.code}</span>
-            <span className="text-sm">{mt.name}</span>
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          onClick={() => onSelect(null)}
-          className="cursor-pointer text-muted-foreground"
-        >
-          Очистить
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <td
+      ref={cellRef}
+      style={cellStyle}
+      onClick={() => {
+        const rect = cellRef.current?.getBoundingClientRect();
+        if (rect) onOpen({ rect, employeeId, day, value, secondaryValue });
+      }}
+    >
+      {renderContent()}
+    </td>
   );
 }

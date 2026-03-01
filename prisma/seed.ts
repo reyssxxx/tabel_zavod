@@ -12,6 +12,8 @@ async function main() {
   await prisma.user.deleteMany();
   await prisma.department.deleteMany();
   await prisma.workSchedule.deleteMany();
+  await prisma.position.deleteMany();
+  await prisma.appSettings.deleteMany();
 
   // === Графики работы ===
   const schedules = await Promise.all([
@@ -22,6 +24,25 @@ async function main() {
   ]);
 
   const [sched8, schedNight, sched2x2, schedSutki] = schedules;
+
+  // === Должности ===
+  const positionData = [
+    { name: "Сборщик-клепальщик", baseSalary: 72000 },
+    { name: "Оператор ЧПУ", baseSalary: 85000 },
+    { name: "Инженер-технолог", baseSalary: 95000 },
+    { name: "Слесарь-сборщик", baseSalary: 68000 },
+    { name: "Контролёр ОТК", baseSalary: 74000 },
+    { name: "Токарь", baseSalary: 76000 },
+    { name: "Специалист по закупкам", baseSalary: 82000 },
+    { name: "Фрезеровщик", baseSalary: 78000 },
+    { name: "Бухгалтер", baseSalary: 88000 },
+    { name: "Электромонтажник", baseSalary: 80000 },
+    { name: "Контролёр (совместитель)", baseSalary: 37000 },
+  ];
+  const createdPositions = await Promise.all(
+    positionData.map((p) => prisma.position.create({ data: p }))
+  );
+  const posMap = new Map(createdPositions.map((p) => [p.name, p.id]));
 
   // === Подразделения ===
   const departments = await Promise.all([
@@ -60,15 +81,30 @@ async function main() {
   const [yavka, otpusk, bolnichniy, komandirovka, progul, sokr] = markTypes;
 
   // === Пользователи системы ===
-  const passwordHash = await bcrypt.hash("admin123", 10);
-  const masterHash = await bcrypt.hash("master123", 10);
-  const buhHash = await bcrypt.hash("buh123", 10);
+  const hashes = await Promise.all([
+    bcrypt.hash("Zvezda@2026",  10), // admin
+    bcrypt.hash("Beriev@2026",  10), // admin2
+    bcrypt.hash("Ceh1Master!",  10), // manager ceh1
+    bcrypt.hash("Ceh2Master!",  10), // manager ceh2
+    bcrypt.hash("Ceh3Master!",  10), // manager ceh3
+    bcrypt.hash("Buhgalter1!",  10), // accountant
+    bcrypt.hash("Buhgalter2!",  10), // accountant2
+    bcrypt.hash("HrOtdel2026!", 10), // hr
+    bcrypt.hash("HrSpec2026!",  10), // hr2
+  ]);
+  const [
+    hashAdmin1, hashAdmin2,
+    hashMgr1, hashMgr2, hashMgr3,
+    hashBuh1, hashBuh2,
+    hashHr1, hashHr2,
+  ] = hashes;
 
   await Promise.all([
+    // ADMIN
     prisma.user.create({
       data: {
         email: "admin@tabel.ru",
-        passwordHash,
+        passwordHash: hashAdmin1,
         name: "Администратор",
         role: "ADMIN",
         departmentId: null,
@@ -76,8 +112,19 @@ async function main() {
     }),
     prisma.user.create({
       data: {
+        email: "sokolov.dmitry@tantk.ru",
+        passwordHash: hashAdmin2,
+        name: "Соколов Дмитрий Игоревич",
+        role: "ADMIN",
+        departmentId: null,
+      },
+    }),
+
+    // MANAGER
+    prisma.user.create({
+      data: {
         email: "master@tabel.ru",
-        passwordHash: masterHash,
+        passwordHash: hashMgr1,
         name: "Мастер Цеха №1",
         role: "MANAGER",
         departmentId: ceh1.id,
@@ -85,10 +132,86 @@ async function main() {
     }),
     prisma.user.create({
       data: {
+        email: "vasiliev.oleg@tantk.ru",
+        passwordHash: hashMgr1,
+        name: "Васильев Олег Николаевич",
+        role: "MANAGER",
+        departmentId: ceh1.id,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "zaharov.roman@tantk.ru",
+        passwordHash: hashMgr2,
+        name: "Захаров Роман Викторович",
+        role: "MANAGER",
+        departmentId: ceh2.id,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "fedorov.mikhail@tantk.ru",
+        passwordHash: hashMgr3,
+        name: "Фёдоров Михаил Андреевич",
+        role: "MANAGER",
+        departmentId: ceh3.id,
+      },
+    }),
+
+    // ACCOUNTANT
+    prisma.user.create({
+      data: {
         email: "buh@tabel.ru",
-        passwordHash: buhHash,
+        passwordHash: hashBuh1,
         name: "Бухгалтер Петрова",
         role: "ACCOUNTANT",
+        departmentId: null,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "petrova.marina@tantk.ru",
+        passwordHash: hashBuh1,
+        name: "Петрова Марина Сергеевна",
+        role: "ACCOUNTANT",
+        departmentId: null,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "orlova.natalia@tantk.ru",
+        passwordHash: hashBuh2,
+        name: "Орлова Наталья Юрьевна",
+        role: "ACCOUNTANT",
+        departmentId: null,
+      },
+    }),
+
+    // HR
+    prisma.user.create({
+      data: {
+        email: "hr@tabel.ru",
+        passwordHash: hashHr1,
+        name: "Специалист ОК",
+        role: "HR",
+        departmentId: null,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "smirnova.elena@tantk.ru",
+        passwordHash: hashHr1,
+        name: "Смирнова Елена Павловна",
+        role: "HR",
+        departmentId: null,
+      },
+    }),
+    prisma.user.create({
+      data: {
+        email: "kuznetsova.irina@tantk.ru",
+        passwordHash: hashHr2,
+        name: "Кузнецова Ирина Владимировна",
+        role: "HR",
         departmentId: null,
       },
     }),
@@ -103,6 +226,8 @@ async function main() {
         departmentId: ceh1.id,
         personnelNumber: "101",
         scheduleId: sched8.id,
+        positionId: posMap.get("Сборщик-клепальщик"),
+        hireDate: new Date("2015-03-15"), // стаж ~11 лет → 100%
       },
     }),
     prisma.employee.create({
@@ -111,7 +236,9 @@ async function main() {
         position: "Оператор ЧПУ",
         departmentId: ceh1.id,
         personnelNumber: "102",
-        scheduleId: sched2x2.id, // работает по графику 2/2
+        scheduleId: sched2x2.id,
+        positionId: posMap.get("Оператор ЧПУ"),
+        hireDate: new Date("2020-07-01"), // стаж ~5 лет → 80%
       },
     }),
     prisma.employee.create({
@@ -121,6 +248,8 @@ async function main() {
         departmentId: ceh2.id,
         personnelNumber: "201",
         scheduleId: sched8.id,
+        positionId: posMap.get("Инженер-технолог"),
+        hireDate: new Date("2010-01-20"), // стаж ~16 лет → 100%
       },
     }),
     prisma.employee.create({
@@ -130,6 +259,8 @@ async function main() {
         departmentId: ceh2.id,
         personnelNumber: "202",
         scheduleId: sched8.id,
+        positionId: posMap.get("Слесарь-сборщик"),
+        hireDate: new Date("2023-09-10"), // стаж ~2 года → 60%
       },
     }),
     prisma.employee.create({
@@ -139,6 +270,8 @@ async function main() {
         departmentId: otk.id,
         personnelNumber: "301",
         scheduleId: sched8.id,
+        positionId: posMap.get("Контролёр ОТК"),
+        hireDate: new Date("2018-04-05"), // стаж ~8 лет → 100%
       },
     }),
     prisma.employee.create({
@@ -147,7 +280,9 @@ async function main() {
         position: "Токарь",
         departmentId: ceh3.id,
         personnelNumber: "401",
-        scheduleId: schedNight.id, // ночная смена
+        scheduleId: schedNight.id,
+        positionId: posMap.get("Токарь"),
+        hireDate: new Date("2019-11-01"), // стаж ~6 лет → 80%
       },
     }),
     prisma.employee.create({
@@ -157,6 +292,8 @@ async function main() {
         departmentId: zakupki.id,
         personnelNumber: "501",
         scheduleId: sched8.id,
+        positionId: posMap.get("Специалист по закупкам"),
+        hireDate: new Date("2016-06-12"), // стаж ~9 лет → 100%
       },
     }),
     prisma.employee.create({
@@ -166,6 +303,8 @@ async function main() {
         departmentId: ceh3.id,
         personnelNumber: "402",
         scheduleId: sched8.id,
+        positionId: posMap.get("Фрезеровщик"),
+        hireDate: new Date("2022-02-28"), // стаж ~4 года → 60%
       },
     }),
     prisma.employee.create({
@@ -175,6 +314,8 @@ async function main() {
         departmentId: buh.id,
         personnelNumber: "601",
         scheduleId: sched8.id,
+        positionId: posMap.get("Бухгалтер"),
+        hireDate: new Date("2013-08-19"), // стаж ~12 лет → 100%
       },
     }),
     prisma.employee.create({
@@ -183,8 +324,10 @@ async function main() {
         position: "Электромонтажник",
         departmentId: ceh1.id,
         personnelNumber: "103",
-        isActive: false, // уволен — для демонстрации
+        isActive: false,
         scheduleId: sched8.id,
+        positionId: posMap.get("Электромонтажник"),
+        hireDate: new Date("2017-03-01"),
       },
     }),
   ]);
@@ -202,6 +345,8 @@ async function main() {
       personnelNumber: "101-С", // суффикс -С = совместитель
       scheduleId: sched8.id,
       linkedEmployeeId: ivanov.id,
+      positionId: posMap.get("Контролёр (совместитель)"),
+      hireDate: new Date("2015-03-15"), // тот же Иванов
     },
   });
   // Обратная ссылка
@@ -240,37 +385,64 @@ async function main() {
     });
   }
 
-  // === Заполнение табеля за текущий месяц ===
+  // === Заполнение табеля: февраль полностью + март до сегодня ===
   const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayYear = now.getFullYear();
+  const todayMonth = now.getMonth();
+  const todayDay = now.getDate();
 
   const allEmployees = [...employees, ivanovOtk];
   const activeEmployees = allEmployees.filter((e) => e.isActive);
-  const workMarkTypes = [yavka, yavka, yavka, yavka, yavka, otpusk, bolnichniy, komandirovka, sokr];
 
-  for (const emp of activeEmployees) {
-    for (let day = 1; day <= Math.min(daysInMonth, now.getDate()); day++) {
-      const date = new Date(year, month, day);
-      const dayOfWeek = date.getDay();
-      if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-      if (Math.random() > 0.8) continue;
+  // Месяцы для заполнения: январь, февраль, март (текущий)
+  const monthsToFill = [
+    { year: 2026, month: 0, lastDay: 31 },  // январь — полный
+    { year: 2026, month: 1, lastDay: 28 },  // февраль — полный
+    { year: todayYear, month: todayMonth, lastDay: todayDay }, // текущий — до сегодня
+  ].filter(
+    // дедупликация: не добавлять текущий если уже есть в списке
+    (m, i, arr) => arr.findIndex((x) => x.year === m.year && x.month === m.month) === i
+  );
 
-      const mark = workMarkTypes[Math.floor(Math.random() * workMarkTypes.length)];
-      await prisma.timeRecord.create({
-        data: { employeeId: emp.id, date, markTypeId: mark.id, slot: 0, overtimeHours: 0 },
-      });
+  for (const { year, month, lastDay } of monthsToFill) {
+    for (const emp of activeEmployees) {
+      // У каждого сотрудника свой паттерн: один человек может быть в отпуске неделю
+      const vacationStart = Math.floor(Math.random() * 20) + 1;
+      const onVacation = Math.random() < 0.15; // 15% шанс что в этом месяце отпуск
+
+      for (let day = 1; day <= lastDay; day++) {
+        const date = new Date(year, month, day);
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek === 0 || dayOfWeek === 6) continue; // пропускаем вых.
+
+        let mark: typeof yavka;
+        if (onVacation && day >= vacationStart && day < vacationStart + 7) {
+          mark = otpusk;
+        } else if (Math.random() < 0.05) {
+          // 5% — пропустит день (больничный или прогул)
+          mark = Math.random() < 0.7 ? bolnichniy : progul;
+        } else if (Math.random() < 0.03) {
+          mark = komandirovka;
+        } else {
+          mark = yavka;
+        }
+
+        await prisma.timeRecord.create({
+          data: { employeeId: emp.id, date, markTypeId: mark.id, slot: 0, overtimeHours: 0 },
+        });
+      }
     }
   }
+
 
   console.log("Seed completed successfully!");
   console.log(`- ${departments.length} departments`);
   console.log(`- ${schedules.length} work schedules`);
+  console.log(`- ${createdPositions.length} positions with salaries`);
   console.log(`- ${allEmployees.length} employees (incl. 1 part-timer)`);
   console.log(`- ${markTypes.length} mark types`);
   console.log(`- ${holidays2026.length} holidays`);
-  console.log(`- 3 users (admin@tabel.ru, master@tabel.ru, buh@tabel.ru)`);
+  console.log(`- 12 users (admin, managers, accountants, HR — see table below)`);
 }
 
 main()

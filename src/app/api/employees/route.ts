@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser, requireRole, canEditDepartment } from "@/lib/auth-utils";
+import { logAudit } from "@/lib/audit";
 
 const employeeInclude = {
   department: { select: { id: true, name: true } },
   schedule: { select: { id: true, name: true, hoursPerDay: true } },
+  positionRef: { select: { id: true, name: true, baseSalary: true } },
   linkedEmployee: {
     select: { id: true, fullName: true, department: { select: { name: true } } },
   },
@@ -60,17 +62,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await requireRole("ADMIN", "MANAGER");
+    const user = await requireRole("ADMIN", "HR");
 
     const body = await request.json();
-    const { fullName, position, departmentId, personnelNumber, scheduleId, linkedEmployeeId } =
+    const { fullName, position, departmentId, personnelNumber, scheduleId, positionId, linkedEmployeeId, hireDate } =
       body as {
         fullName: string;
         position: string;
         departmentId: string;
         personnelNumber: string;
         scheduleId?: string | null;
+        positionId?: string | null;
         linkedEmployeeId?: string | null;
+        hireDate?: string | null;
       };
 
     if (!fullName?.trim() || !position?.trim() || !departmentId || !personnelNumber?.trim()) {
@@ -101,7 +105,9 @@ export async function POST(request: NextRequest) {
         departmentId,
         personnelNumber: personnelNumber.trim(),
         scheduleId: scheduleId || null,
+        positionId: positionId || null,
         linkedEmployeeId: linkedEmployeeId || null,
+        hireDate: hireDate ? new Date(hireDate) : null,
       },
       include: employeeInclude,
     });
@@ -112,6 +118,14 @@ export async function POST(request: NextRequest) {
         data: { linkedEmployeeId: employee.id },
       });
     }
+
+    await logAudit(user, "EMPLOYEE", "CREATE", employee.id, {
+      fullName: employee.fullName,
+      personnelNumber: employee.personnelNumber,
+      position: employee.position,
+      departmentName: employee.department.name,
+      scheduleId: employee.scheduleId ?? null,
+    });
 
     return NextResponse.json(employee, { status: 201 });
   } catch (err) {

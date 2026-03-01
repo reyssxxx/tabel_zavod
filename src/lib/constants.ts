@@ -4,6 +4,7 @@ export const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Администратор",
   MANAGER: "Мастер цеха",
   ACCOUNTANT: "Бухгалтер",
+  HR: "Отдел кадров",
 };
 
 export const MARK_TYPE_LABELS: Record<string, string> = {

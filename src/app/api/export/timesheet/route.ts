@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { generateTimesheetXlsx, generateTimesheetCsv } from "@/lib/export";
-import type { TimesheetRow, TimeRecordData } from "@/types";
+import { loadHolidays, formatDateKey } from "@/lib/holidays";
+import type { TimesheetRow, TimeRecordData } from "@/types"; // TimeRecordData used in local mapping
 
 export async function GET(request: NextRequest) {
   const user = await getCurrentUser();
@@ -45,7 +46,6 @@ export async function GET(request: NextRequest) {
   const startDate = new Date(Date.UTC(year, month, 1));
   const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
 
-  // Получаем сотрудников (та же логика что в /api/timerecords)
   const employees = await prisma.employee.findMany({
     where: {
       isActive: true,
@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
       id: true,
       fullName: true,
       personnelNumber: true,
+      schedule: { select: { id: true, name: true, hoursPerDay: true } },
     },
   });
 
@@ -69,46 +70,58 @@ export async function GET(request: NextRequest) {
             date: { gte: startDate, lte: endDate },
           },
           include: { markType: true },
+          orderBy: { slot: "asc" },
         })
       : [];
 
-  // Формируем TimesheetRow[]
   const rows: TimesheetRow[] = employees.map((emp) => {
     const empRecords = timeRecords.filter((r) => r.employeeId === emp.id);
     const records: Record<number, TimeRecordData> = {};
-
-    let totalDays = 0;
-    let totalHours = 0;
+    const secondaryRecords: Record<number, TimeRecordData> = {};
+    let totalDays = 0, totalHours = 0, totalOvertimeHours = 0;
 
     for (const rec of empRecords) {
       const day = rec.date.getUTCDate();
-      records[day] = {
+      const schedHours = emp.schedule?.hoursPerDay ?? rec.markType.defaultHours;
+      const recData: TimeRecordData = {
         employeeId: emp.id,
         date: rec.date.toISOString().split("T")[0],
         markTypeId: rec.markTypeId,
         markCode: rec.markType.code,
         markColor: rec.markType.color,
+        overtimeHours: rec.overtimeHours,
+        actualHours: rec.actualHours,
+        slot: rec.slot,
       };
-      totalDays += 1;
-      totalHours += rec.markType.defaultHours;
+      if (rec.slot === 0) {
+        records[day] = recData;
+        totalDays += 1;
+        totalHours += rec.actualHours ?? schedHours;
+      } else {
+        secondaryRecords[day] = recData;
+      }
+      totalOvertimeHours += rec.overtimeHours;
     }
 
     return {
-      employee: {
-        id: emp.id,
-        fullName: emp.fullName,
-        personnelNumber: emp.personnelNumber,
-      },
-      records,
-      totalDays,
-      totalHours,
+      employee: { id: emp.id, fullName: emp.fullName, personnelNumber: emp.personnelNumber, schedule: emp.schedule ?? null },
+      records, secondaryRecords, totalDays, totalHours, totalOvertimeHours,
     };
   });
 
   const monthNum = month + 1;
 
   if (format === "xlsx") {
-    const buffer = generateTimesheetXlsx(rows, month, year, departmentName);
+    // Загружаем праздники и формируем map для месяца
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const allHolidays = await loadHolidays();
+    const holidaysInMonth: Record<string, { name: string; isShortened: boolean }> = {};
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = formatDateKey(year, month, d);
+      const h = allHolidays.get(key);
+      if (h) holidaysInMonth[key] = h;
+    }
+    const buffer = generateTimesheetXlsx(rows, month, year, departmentName, holidaysInMonth);
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type":

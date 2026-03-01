@@ -79,12 +79,6 @@ export default function ReportsPage() {
             year={year}
             month={month}
             departmentId={departmentId}
-            type="timesheet"
-          />
-          <ExportButtons
-            year={year}
-            month={month}
-            departmentId={departmentId}
             type="report"
           />
         </div>

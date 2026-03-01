@@ -36,7 +36,7 @@ export function canEditDepartment(
   userDepartmentId: string | null,
   targetDepartmentId: string
 ): boolean {
-  if (userRole === "ADMIN") return true;
+  if (userRole === "ADMIN" || userRole === "HR") return true;
   if (userRole === "ACCOUNTANT") return false;
   if (userRole === "MANAGER") {
     return userDepartmentId === targetDepartmentId;
@@ -45,5 +45,9 @@ export function canEditDepartment(
 }
 
 export function canEdit(userRole: Role): boolean {
-  return userRole === "ADMIN" || userRole === "MANAGER";
+  return userRole === "ADMIN" || userRole === "MANAGER" || userRole === "HR";
+}
+
+export function canCreateEmployee(userRole: Role): boolean {
+  return userRole === "ADMIN" || userRole === "HR";
 }

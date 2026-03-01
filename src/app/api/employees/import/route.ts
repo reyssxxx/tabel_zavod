@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole } from "@/lib/auth-utils";
+import { logAudit } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   try {
-    await requireRole("ADMIN");
+    const user = await requireRole("ADMIN", "HR");
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -42,22 +43,30 @@ export async function POST(request: NextRequest) {
     const colPersonnel = headers.findIndex((h) =>
       h.toLowerCase().includes("табельн")
     );
+    // Необязательные колонки
+    const colSchedule = headers.findIndex((h) =>
+      h.toLowerCase().includes("график")
+    );
 
     if (colFio === -1 || colPosition === -1 || colDept === -1 || colPersonnel === -1) {
       return NextResponse.json(
         {
           error:
-            "Неверный формат CSV. Ожидаемые колонки: ФИО, Должность, Подразделение, Табельный номер",
+            "Неверный формат CSV. Обязательные колонки: ФИО, Должность, Подразделение, Табельный номер",
         },
         { status: 400 }
       );
     }
 
-    // Загружаем все подразделения для матчинга по имени
-    const departments = await prisma.department.findMany({
-      select: { id: true, name: true },
-    });
+    // Загружаем справочники для матчинга по имени
+    const [departments, schedules, positions] = await Promise.all([
+      prisma.department.findMany({ select: { id: true, name: true } }),
+      prisma.workSchedule.findMany({ select: { id: true, name: true } }),
+      prisma.position.findMany({ select: { id: true, name: true } }),
+    ]);
     const deptMap = new Map(departments.map((d) => [d.name.toLowerCase(), d.id]));
+    const scheduleMap = new Map(schedules.map((s) => [s.name.toLowerCase(), s.id]));
+    const positionMap = new Map(positions.map((p) => [p.name.toLowerCase(), p.id]));
 
     const errors: string[] = [];
     let imported = 0;
@@ -70,6 +79,7 @@ export async function POST(request: NextRequest) {
       const position = cols[colPosition] ?? "";
       const deptName = cols[colDept] ?? "";
       const personnelNumber = cols[colPersonnel] ?? "";
+      const scheduleName = colSchedule >= 0 ? (cols[colSchedule] ?? "") : "";
 
       if (!fio || !position || !deptName || !personnelNumber) {
         errors.push(`Строка ${rowNum}: пустые обязательные поля`);
@@ -81,6 +91,15 @@ export async function POST(request: NextRequest) {
         errors.push(`Строка ${rowNum}: подразделение "${deptName}" не найдено`);
         continue;
       }
+
+      // Матчинг необязательных полей
+      const scheduleId = scheduleName ? (scheduleMap.get(scheduleName.toLowerCase()) ?? null) : null;
+      if (scheduleName && !scheduleId) {
+        errors.push(`Строка ${rowNum}: график "${scheduleName}" не найден (строка пропущена)`);
+        continue;
+      }
+      // Должность с окладом — ищем по полному совпадению названия
+      const positionId = positionMap.get(position.toLowerCase()) ?? null;
 
       // Проверка уникальности
       const existing = await prisma.employee.findUnique({
@@ -99,6 +118,8 @@ export async function POST(request: NextRequest) {
             position,
             departmentId,
             personnelNumber,
+            ...(scheduleId ? { scheduleId } : {}),
+            ...(positionId ? { positionId } : {}),
           },
         });
         imported++;
@@ -106,6 +127,15 @@ export async function POST(request: NextRequest) {
         errors.push(`Строка ${rowNum}: ошибка при создании сотрудника "${fio}"`);
       }
     }
+
+    const totalRows = lines.length - 1;
+    await logAudit(user, "EMPLOYEE_IMPORT", "CREATE", "IMPORT", {
+      fileName: file.name,
+      totalRows,
+      imported,
+      skipped: totalRows - imported,
+      errors: errors.slice(0, 20),
+    });
 
     return NextResponse.json({ imported, errors });
   } catch (err) {

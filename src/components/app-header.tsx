@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { LogOut, ChevronDown, Shield, Wrench, Calculator } from "lucide-react";
+import { LogOut, ChevronDown, Shield, Wrench, Calculator, Users } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/constants";
 
 const DEMO_ACCOUNTS = [
@@ -35,6 +35,13 @@ const DEMO_ACCOUNTS = [
     label: "Бухгалтер",
     icon: Calculator,
     color: "bg-green-500",
+  },
+  {
+    email: "hr@tabel.ru",
+    password: "hr123",
+    label: "Отдел кадров",
+    icon: Users,
+    color: "bg-purple-500",
   },
 ];
 

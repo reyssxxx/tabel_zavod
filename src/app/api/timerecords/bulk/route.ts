@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser, canEdit, canEditDepartment } from "@/lib/auth-utils";
+import { logAudit } from "@/lib/audit";
 
 export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json();
   const { entries } = body as {
-    entries: Array<{ employeeId: string; date: string; markTypeId: string }>;
+    entries: Array<{ employeeId: string; date: string; markTypeId: string | null; slot?: number; overtimeHours?: number }>;
   };
 
   if (!Array.isArray(entries) || entries.length === 0) {
@@ -39,18 +40,59 @@ export async function POST(request: NextRequest) {
 
   let updated = 0;
   for (const entry of entries) {
-    const recordDate = new Date(entry.date);
-    await prisma.timeRecord.upsert({
-      where: { employeeId_date_slot: { employeeId: entry.employeeId, date: recordDate, slot: 0 } },
-      update: { markTypeId: entry.markTypeId },
-      create: {
-        employeeId: entry.employeeId,
-        date: recordDate,
-        markTypeId: entry.markTypeId,
-      },
+    // Нормализуем дату до UTC полночи: берём только YYYY-MM-DD часть
+    const [y, m, d] = (entry.date.split("T")[0]).split("-").map(Number);
+    const recordDate = new Date(Date.UTC(y, m - 1, d));
+    const slot = entry.slot ?? 0;
+
+    // Ищем существующую запись с учётом возможного сдвига часового пояса в seed-данных
+    const dayStart = new Date(Date.UTC(y, m - 1, d));
+    const dayEnd = new Date(Date.UTC(y, m - 1, d + 1));
+    const existing = await prisma.timeRecord.findFirst({
+      where: { employeeId: entry.employeeId, date: { gte: dayStart, lt: dayEnd }, slot },
+      select: { id: true, date: true },
     });
-    updated++;
+
+    if (entry.markTypeId === null) {
+      // Очистка ячейки
+      if (existing) {
+        await prisma.timeRecord.delete({ where: { id: existing.id } });
+        updated++;
+      }
+    } else {
+      const overtimeHours = entry.overtimeHours ?? 0;
+      if (existing) {
+        await prisma.timeRecord.update({
+          where: { id: existing.id },
+          data: { markTypeId: entry.markTypeId, overtimeHours },
+        });
+      } else {
+        await prisma.timeRecord.create({
+          data: { employeeId: entry.employeeId, date: recordDate, markTypeId: entry.markTypeId, slot, overtimeHours },
+        });
+      }
+      updated++;
+    }
   }
+
+  // Одна запись аудита на весь bulk-запрос
+  const uniqueEmployeeIds = [...new Set(entries.map((e) => e.employeeId))];
+  const empDetails = await prisma.employee.findMany({
+    where: { id: { in: uniqueEmployeeIds } },
+    select: { id: true, fullName: true, personnelNumber: true },
+  });
+  const sortedDates = entries.map((e) => e.date).sort();
+  const nonNullMarkTypeIds = [...new Set(entries.map((e) => e.markTypeId).filter(Boolean))] as string[];
+  const markTypes = nonNullMarkTypeIds.length > 0
+    ? await prisma.markType.findMany({ where: { id: { in: nonNullMarkTypeIds } }, select: { code: true } })
+    : [];
+  const isClear = entries.every((e) => e.markTypeId === null);
+  await logAudit(user, "TIMERECORD", isClear ? "DELETE" : "UPDATE", "BULK", {
+    count: updated,
+    employees: empDetails.map((e) => ({ id: e.id, name: e.fullName, personnelNumber: e.personnelNumber })),
+    dateRange: { from: sortedDates[0], to: sortedDates[sortedDates.length - 1] },
+    markCodes: isClear ? ["(очистка)"] : markTypes.map((m) => m.code),
+  });
 
   return NextResponse.json({ updated });
 }

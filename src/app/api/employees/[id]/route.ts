@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireRole, canEditDepartment } from "@/lib/auth-utils";
+import { logAudit } from "@/lib/audit";
 
 const employeeInclude = {
   department: { select: { id: true, name: true } },
   schedule: { select: { id: true, name: true, hoursPerDay: true } },
+  positionRef: { select: { id: true, name: true, baseSalary: true } },
   linkedEmployee: {
     select: { id: true, fullName: true, department: { select: { name: true } } },
   },
@@ -46,7 +48,11 @@ export async function PUT(
 
     const employee = await prisma.employee.findUnique({
       where: { id },
-      select: { departmentId: true, personnelNumber: true, linkedEmployeeId: true },
+      select: {
+        departmentId: true, personnelNumber: true, linkedEmployeeId: true,
+        fullName: true, position: true, isActive: true, scheduleId: true,
+        department: { select: { name: true } },
+      },
     });
 
     if (!employee) {
@@ -65,7 +71,9 @@ export async function PUT(
       personnelNumber,
       isActive,
       scheduleId,
+      positionId,
       linkedEmployeeId,
+      hireDate,
     } = body as {
       fullName?: string;
       position?: string;
@@ -73,7 +81,9 @@ export async function PUT(
       personnelNumber?: string;
       isActive?: boolean;
       scheduleId?: string | null;
+      positionId?: string | null;
       linkedEmployeeId?: string | null;
+      hireDate?: string | null;
     };
 
     if (departmentId && !canEditDepartment(user.role, user.departmentId, departmentId)) {
@@ -120,11 +130,45 @@ export async function PUT(
           ...(personnelNumber !== undefined ? { personnelNumber: personnelNumber.trim() } : {}),
           ...(isActive !== undefined ? { isActive } : {}),
           ...(scheduleId !== undefined ? { scheduleId: scheduleId || null } : {}),
+          ...(positionId !== undefined ? { positionId: positionId || null } : {}),
           ...(newLinkedId !== undefined ? { linkedEmployeeId: newLinkedId } : {}),
+          ...(hireDate !== undefined ? { hireDate: hireDate ? new Date(hireDate) : null } : {}),
         },
         include: employeeInclude,
       });
     });
+
+    // Вычисляем diff изменённых полей
+    const changedFields: Record<string, { before: unknown; after: unknown }> = {};
+    if (fullName !== undefined && fullName.trim() !== employee.fullName) {
+      changedFields.fullName = { before: employee.fullName, after: fullName.trim() };
+    }
+    if (position !== undefined && position.trim() !== employee.position) {
+      changedFields.position = { before: employee.position, after: position.trim() };
+    }
+    if (personnelNumber !== undefined && personnelNumber.trim() !== employee.personnelNumber) {
+      changedFields.personnelNumber = { before: employee.personnelNumber, after: personnelNumber.trim() };
+    }
+    if (departmentId !== undefined && departmentId !== employee.departmentId) {
+      changedFields.departmentName = {
+        before: employee.department?.name,
+        after: updated.department?.name,
+      };
+    }
+    if (isActive !== undefined && isActive !== employee.isActive) {
+      changedFields.isActive = { before: employee.isActive, after: isActive };
+    }
+    if (scheduleId !== undefined && (scheduleId || null) !== employee.scheduleId) {
+      changedFields.scheduleId = { before: employee.scheduleId, after: scheduleId || null };
+    }
+
+    if (Object.keys(changedFields).length > 0) {
+      await logAudit(user, "EMPLOYEE", "UPDATE", id, {
+        fullName: employee.fullName,
+        personnelNumber: employee.personnelNumber,
+        changedFields,
+      });
+    }
 
     return NextResponse.json(updated);
   } catch (err) {
@@ -149,7 +193,11 @@ export async function DELETE(
 
     const employee = await prisma.employee.findUnique({
       where: { id },
-      select: { departmentId: true, isActive: true },
+      select: {
+        departmentId: true, isActive: true,
+        fullName: true, personnelNumber: true,
+        department: { select: { name: true } },
+      },
     });
 
     if (!employee) {
@@ -163,6 +211,12 @@ export async function DELETE(
     await prisma.employee.update({
       where: { id },
       data: { isActive: false },
+    });
+
+    await logAudit(user, "EMPLOYEE", "DELETE", id, {
+      fullName: employee.fullName,
+      personnelNumber: employee.personnelNumber,
+      departmentName: employee.department?.name ?? "—",
     });
 
     return NextResponse.json({ success: true });

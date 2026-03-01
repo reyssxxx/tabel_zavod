@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,7 +30,6 @@ import {
 } from "@/components/ui/select";
 import { EmployeeForm } from "@/components/employee-form";
 import { CsvImportDialog } from "@/components/csv-import-dialog";
-import { EmployeeProfileSheet } from "@/components/employee-profile-sheet";
 import { Plus, Upload, Pencil, UserX, ChevronLeft, ChevronRight, Search } from "lucide-react";
 import type { EmployeeWithDepartment, DepartmentOption, SessionUser } from "@/types";
 
@@ -37,13 +37,16 @@ const PAGE_SIZE = 20;
 
 export default function EmployeesPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const user = session?.user as SessionUser | undefined;
   const role = user?.role;
   const userDeptId = user?.departmentId ?? null;
 
   const isAccountant = role === "ACCOUNTANT";
   const isAdmin = role === "ADMIN";
+  const isHR = role === "HR";
   const isManager = role === "MANAGER";
+  const canCreate = isAdmin || isHR;
 
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -57,7 +60,6 @@ export default function EmployeesPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editEmployee, setEditEmployee] = useState<EmployeeWithDepartment | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [profileEmployee, setProfileEmployee] = useState<EmployeeWithDepartment | null>(null);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handleSearchChange = (value: string) => {
@@ -110,7 +112,7 @@ export default function EmployeesPage() {
 
   const canEditEmployee = (emp: EmployeeWithDepartment): boolean => {
     if (isAccountant) return false;
-    if (isAdmin) return true;
+    if (isAdmin || isHR) return true;
     if (isManager) return emp.department.id === userDeptId;
     return false;
   };
@@ -156,12 +158,12 @@ export default function EmployeesPage() {
           Показать неактивных
         </label>
         <div className="flex items-center gap-2 ml-auto">
-          {!isAccountant && (
+          {canCreate && (
             <Button onClick={() => setShowAddDialog(true)} size="sm">
               <Plus className="h-4 w-4 mr-1" />Добавить
             </Button>
           )}
-          {isAdmin && (
+          {canCreate && (
             <Button variant="outline" size="sm" onClick={() => setShowImportDialog(true)}>
               <Upload className="h-4 w-4 mr-1" />Импорт CSV
             </Button>
@@ -199,9 +201,21 @@ export default function EmployeesPage() {
                 <TableRow
                   key={emp.id}
                   className={`cursor-pointer hover:bg-muted/50 transition-colors ${!emp.isActive ? "opacity-60" : ""}`}
-                  onClick={() => setProfileEmployee(emp)}
+                  onClick={() => router.push(`/employees/${emp.id}`)}
                 >
-                  <TableCell className="font-medium">{emp.fullName}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {emp.fullName}
+                      {(emp.linkedEmployee || (emp.linkedBy && emp.linkedBy.length > 0)) && (
+                        <Badge variant="outline" className="text-xs border-amber-400 text-amber-700 bg-amber-50">
+                          Совместитель
+                        </Badge>
+                      )}
+                    </div>
+                    {emp.schedule && (
+                      <span className="text-xs text-muted-foreground">{emp.schedule.name}</span>
+                    )}
+                  </TableCell>
                   <TableCell>{emp.position}</TableCell>
                   <TableCell>{emp.department.name}</TableCell>
                   <TableCell>{emp.personnelNumber}</TableCell>
@@ -305,13 +319,6 @@ export default function EmployeesPage() {
         onSuccess={() => { fetchEmployees(); }}
       />
 
-      <EmployeeProfileSheet
-        employee={profileEmployee}
-        onClose={() => setProfileEmployee(null)}
-        onEdit={(emp) => { setProfileEmployee(null); setEditEmployee(emp); }}
-        onDeactivate={(emp) => { setProfileEmployee(null); handleDeactivate(emp); }}
-        canEdit={!!profileEmployee && canEditEmployee(profileEmployee)}
-      />
     </div>
   );
 }

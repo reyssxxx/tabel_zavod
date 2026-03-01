@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { AlertTriangle } from "lucide-react";
+import { formatRub } from "@/lib/salary";
 import type { ReportData } from "@/types";
 
 interface ReportCardProps {
@@ -67,50 +68,70 @@ export function ReportCard({ data }: ReportCardProps) {
         <Separator />
 
         {/* Детали */}
-        <div className="grid grid-cols-2 gap-1.5">
-          <MetricRow
-            label="Сотрудников"
-            value={data.totalEmployees}
-            color="#6b7280"
-          />
-          <MetricRow
-            label="Раб.дней"
-            value={data.workdaysInPeriod}
-            color="#6b7280"
-          />
-          <MetricRow label="Явка" value={data.workDays} color="#22c55e" />
-          <MetricRow label="Отпуск" value={data.vacationDays} color="#3b82f6" />
-          <MetricRow
-            label="Больничный"
-            value={data.sickDays}
-            color="#ef4444"
-          />
-          <MetricRow
-            label="Командировки"
-            value={data.businessTripDays}
-            color="#f59e0b"
-          />
-          <MetricRow label="Прогулы" value={data.absentDays} color="#991b1b" />
+        <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-1.5">
+            <MetricRow
+              label="Сотрудников"
+              value={data.totalEmployees}
+              color="#6b7280"
+            />
+            <MetricRow
+              label="Раб.дней"
+              value={data.workdaysInPeriod}
+              color="#6b7280"
+            />
+            <MetricRow label="Явка" value={data.workDays} color="#22c55e" />
+            <MetricRow label="Отпуск" value={data.vacationDays} color="#3b82f6" />
+            <MetricRow
+              label="Больничный"
+              value={data.sickDays}
+              color="#ef4444"
+            />
+            <MetricRow
+              label="Командировки"
+              value={data.businessTripDays}
+              color="#f59e0b"
+            />
+            <MetricRow label="Прогулы" value={data.absentDays} color="#991b1b" />
+            {data.shortenedDays > 0 && (
+              <MetricRow
+                label="Сокр. дни"
+                value={data.shortenedDays}
+                color="#a855f7"
+              />
+            )}
+          </div>
 
-          {/* Незаполненные дни — только если есть */}
+          {/* Незаполненные дни — вне грида, всегда на всю ширину */}
           {data.unmarkedDays > 0 && (
-            <div className="col-span-2 flex items-center gap-2 rounded-md bg-yellow-50 dark:bg-yellow-950/30 px-2.5 py-1.5 mt-0.5">
+            <div className="flex items-center gap-2 rounded-md bg-yellow-50 dark:bg-yellow-950/30 px-2.5 py-1.5">
               <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-500 shrink-0" />
               <span className="text-xs text-yellow-700 dark:text-yellow-400">
                 Незаполнено: {data.unmarkedDays} дн.
               </span>
             </div>
           )}
-
-          {/* Сокращённые дни — только если есть */}
-          {data.shortenedDays > 0 && (
-            <MetricRow
-              label="Сокр. дни"
-              value={data.shortenedDays}
-              color="#a855f7"
-            />
-          )}
         </div>
+
+        {/* ФОТ — только если есть сотрудники с должностями */}
+        {data.salaryEmployeeCount > 0 && (
+          <>
+            <Separator />
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Фонд оплаты труда</p>
+              <div className="flex items-end justify-between">
+                <div>
+                  <div className="text-lg font-bold tabular-nums">{formatRub(data.totalSalary)}</div>
+                  <div className="text-xs text-muted-foreground">Σ по {data.salaryEmployeeCount} сотр.</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold tabular-nums">{formatRub(data.avgSalary)}</div>
+                  <div className="text-xs text-muted-foreground">средняя</div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </CardContent>
     </Card>
   );

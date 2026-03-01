@@ -9,6 +9,7 @@ import {
   CalendarDays,
   BarChart3,
   Settings,
+  ScrollText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,7 @@ const navigation = [
   { name: "Сотрудники", href: "/employees", icon: Users },
   { name: "Табель", href: "/timesheet", icon: CalendarDays },
   { name: "Отчёты", href: "/reports", icon: BarChart3 },
+  { name: "Аудит", href: "/audit", icon: ScrollText, roles: ["ADMIN", "ACCOUNTANT"] },
   { name: "Настройки", href: "/settings", icon: Settings, adminOnly: true },
 ];
 
@@ -35,7 +37,11 @@ export function AppSidebar() {
       </div>
       <nav className="flex-1 space-y-1 p-3">
         {navigation
-          .filter((item) => !item.adminOnly || role === "ADMIN")
+          .filter((item) => {
+            if (item.adminOnly && role !== "ADMIN") return false;
+            if (item.roles && !item.roles.includes(role)) return false;
+            return true;
+          })
           .map((item) => {
             const isActive =
               pathname === item.href ||
