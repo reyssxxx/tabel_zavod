@@ -9,14 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 const DEMO_ACCOUNTS = [
-  { label: "Соколов Дмитрий (Администратор)",    email: "sokolov.dmitry@tantk.ru",  password: "Beriev@2026",  color: "bg-red-500",    role: "ADMIN" },
-  { label: "Васильев Олег (Менеджер отдела №1)",   email: "vasiliev.oleg@tantk.ru",   password: "Ceh1Master!",  color: "bg-blue-500",   role: "MANAGER" },
-  { label: "Захаров Роман (Менеджер отдела №2)",   email: "zaharov.roman@tantk.ru",   password: "Ceh2Master!",  color: "bg-blue-400",   role: "MANAGER" },
-  { label: "Фёдоров Михаил (Менеджер отдела №3)",  email: "fedorov.mikhail@tantk.ru", password: "Ceh3Master!",  color: "bg-blue-300",   role: "MANAGER" },
-  { label: "Петрова Марина (Бухгалтер)",          email: "petrova.marina@tantk.ru",  password: "Buhgalter1!", color: "bg-green-500",  role: "ACCOUNTANT" },
-  { label: "Орлова Наталья (Бухгалтер)",          email: "orlova.natalia@tantk.ru",  password: "Buhgalter2!", color: "bg-green-400",  role: "ACCOUNTANT" },
-  { label: "Смирнова Елена (Специалист ОК)",      email: "smirnova.elena@tantk.ru",  password: "HrOtdel2026!", color: "bg-purple-500", role: "HR" },
-  { label: "Кузнецова Ирина (Специалист ОК)",     email: "kuznetsova.irina@tantk.ru",password: "HrSpec2026!", color: "bg-purple-400", role: "HR" },
+  { label: "Администратор",                        email: "admin@tabel.ru",            password: "Zvezda@2026",  color: "bg-red-500",    role: "ADMIN" },
+  { label: "Соколов Дмитрий (Администратор)",      email: "sokolov.dmitry@zavod.ru",   password: "Beriev@2026",  color: "bg-red-400",    role: "ADMIN" },
+  { label: "Менеджер отдела №1",                   email: "master@tabel.ru",           password: "Ceh1Master!",  color: "bg-blue-500",   role: "MANAGER" },
+  { label: "Захаров Роман (Менеджер отдела №2)",   email: "zaharov.roman@zavod.ru",    password: "Ceh2Master!",  color: "bg-blue-400",   role: "MANAGER" },
+  { label: "Фёдоров Михаил (Менеджер отдела №3)",  email: "fedorov.mikhail@zavod.ru",  password: "Ceh3Master!",  color: "bg-blue-300",   role: "MANAGER" },
+  { label: "Орлов Кирилл (Менеджер ИТ)",           email: "it.head@zavod.ru",          password: "ItMaster!",    color: "bg-blue-200",   role: "MANAGER" },
+  { label: "Петрова Марина (Бухгалтер)",           email: "buh@tabel.ru",              password: "Buhgalter1!", color: "bg-green-500",  role: "ACCOUNTANT" },
+  { label: "Орлова Наталья (Бухгалтер)",           email: "orlova@zavod.ru",           password: "Buhgalter2!", color: "bg-green-400",  role: "ACCOUNTANT" },
+  { label: "Смирнова Елена (Специалист ОК)",       email: "hr@tabel.ru",               password: "HrOtdel2026!", color: "bg-purple-500", role: "HR" },
+  { label: "Кузнецова Ирина (Специалист ОК)",      email: "kuznetsova@zavod.ru",       password: "HrSpec2026!", color: "bg-purple-400", role: "HR" },
 ];
 
 export default function LoginPage() {
