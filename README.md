@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Табель учёта рабочего времени — ТАНТК им. Бериева
 
-## Getting Started
+Цифровая система учёта рабочего времени для производственных предприятий. Разработана на хакатоне.
 
-First, run the development server:
+## Стек
+
+- **Next.js 16** (App Router) + TypeScript
+- **Prisma 6** + SQLite
+- **NextAuth v5** — JWT-сессии с ролевой моделью
+- **Tailwind CSS** + shadcn/ui
+
+## Роли
+
+| Роль | Доступ |
+|------|--------|
+| ADMIN | Полный доступ, настройки, пользователи |
+| MANAGER | Табель и сотрудники только своего подразделения |
+| ACCOUNTANT | Только чтение, экспорт отчётов |
+| HR | Просмотр данных по всем сотрудникам |
+
+## Демо-аккаунты
+
+| Роль | Email | Пароль |
+|------|-------|--------|
+| Администратор | sokolov.dmitry@tantk.ru | Beriev@2026 |
+| Менеджер (отдел 1) | vasiliev.oleg@tantk.ru | Ceh1Master! |
+| Менеджер (отдел 2) | zaharov.roman@tantk.ru | Ceh2Master! |
+| Бухгалтер | petrova.marina@tantk.ru | Buhgalter1! |
+| Специалист ОК | smirnova.elena@tantk.ru | HrOtdel2026! |
+
+## Запуск локально
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+pnpm prisma migrate deploy
+pnpm prisma db seed
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Деплой на Railway
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 1. Переменные окружения
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+В настройках сервиса добавить:
 
-## Learn More
+```
+DATABASE_URL=file:/app/data/dev.db
+AUTH_SECRET=<случайная строка 32+ символа>
+NEXTAUTH_URL=https://<ваш-домен>.railway.app
+```
 
-To learn more about Next.js, take a look at the following resources:
+> Для `AUTH_SECRET` можно сгенерировать: `openssl rand -base64 32`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 2. Volume для БД
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+SQLite хранит данные в файле. Чтобы они не терялись при редеплое:
 
-## Deploy on Vercel
+1. Railway → ваш сервис → **Volumes** → Add Volume
+2. Mount path: `/app/data`
+3. Обновить `DATABASE_URL`: `file:/app/data/dev.db`
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### 3. Build & Start команды
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Railway автоматически определит Next.js. Если нужно указать вручную:
+
+- **Build command:** `pnpm install && pnpm prisma migrate deploy && pnpm prisma db seed && pnpm build`
+- **Start command:** `pnpm start`
+
+### 4. Порт
+
+Railway проксирует на порт `3000` автоматически (Next.js default).
+
+---
+
+> **Примечание:** SQLite подходит для демонстрации и небольших нагрузок. Для продакшена рекомендуется заменить на PostgreSQL — достаточно поменять `provider` в `prisma/schema.prisma` и `DATABASE_URL`.
