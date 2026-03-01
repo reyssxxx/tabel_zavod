@@ -195,7 +195,7 @@ async function main() {
   await Promise.all([
     prisma.user.create({ data: { email: "admin@tabel.ru",           passwordHash: hA1, name: "Администратор",                  role: "ADMIN",     departmentId: null } }),
     prisma.user.create({ data: { email: "sokolov.dmitry@zavod.ru",  passwordHash: hA2, name: "Соколов Дмитрий Игоревич",       role: "ADMIN",     departmentId: null } }),
-    prisma.user.create({ data: { email: "master@tabel.ru",          passwordHash: hM1, name: "Мастер Цеха PCB",                role: "MANAGER",   departmentId: ceh1.id } }),
+    prisma.user.create({ data: { email: "master@tabel.ru",          passwordHash: hM1, name: "Менеджер отдела PCB",                role: "MANAGER",   departmentId: ceh1.id } }),
     prisma.user.create({ data: { email: "zaharov.roman@zavod.ru",   passwordHash: hM2, name: "Захаров Роман Викторович",       role: "MANAGER",   departmentId: ceh2.id } }),
     prisma.user.create({ data: { email: "fedorov.mikhail@zavod.ru", passwordHash: hM3, name: "Фёдоров Михаил Андреевич",      role: "MANAGER",   departmentId: ceh3.id } }),
     prisma.user.create({ data: { email: "it.head@zavod.ru",         passwordHash: hM4, name: "Орлов Кирилл Дмитриевич",       role: "MANAGER",   departmentId: itDep.id } }),

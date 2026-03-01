@@ -7,6 +7,7 @@ import { HolidaySettings } from "@/components/settings/holiday-settings";
 import { WorkHoursSettings } from "@/components/settings/work-hours-settings";
 import { ScheduleSettings } from "@/components/settings/schedule-settings";
 import { PositionSettings } from "@/components/settings/position-settings";
+import { UserSettings } from "@/components/settings/user-settings";
 import { Card, CardContent } from "@/components/ui/card";
 import type { SessionUser } from "@/types";
 
@@ -34,6 +35,7 @@ export default function SettingsPage() {
           <TabsTrigger value="holidays">Праздники</TabsTrigger>
           <TabsTrigger value="schedules">Графики работы</TabsTrigger>
           <TabsTrigger value="work-hours">Параметры</TabsTrigger>
+          <TabsTrigger value="users">Пользователи</TabsTrigger>
         </TabsList>
         <TabsContent value="departments" className="mt-4">
           <DepartmentSettings />
@@ -49,6 +51,9 @@ export default function SettingsPage() {
         </TabsContent>
         <TabsContent value="work-hours" className="mt-4">
           <WorkHoursSettings />
+        </TabsContent>
+        <TabsContent value="users" className="mt-4">
+          <UserSettings />
         </TabsContent>
       </Tabs>
     </div>

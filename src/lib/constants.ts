@@ -2,7 +2,7 @@ export const WORK_HOURS_PER_DAY = 8;
 
 export const ROLE_LABELS: Record<string, string> = {
   ADMIN: "Администратор",
-  MANAGER: "Мастер цеха",
+  MANAGER: "Менеджер отдела",
   ACCOUNTANT: "Бухгалтер",
   HR: "Отдел кадров",
 };

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth-utils";
 import { loadHolidays, isWeekend, formatDateKey } from "@/lib/holidays";
 import { generateReportTxt } from "@/lib/export";
+import { calculateSalary, getNormWorkdays, getExperienceYears, DEFAULT_OT_COEF_1, DEFAULT_OT_COEF_2, DEFAULT_OT_THRESHOLD, DEFAULT_WEEKEND_COEF, DEFAULT_HOLIDAY_COEF } from "@/lib/salary";
 import type { ReportData } from "@/types";
 
 function countWorkdaysUntil(
@@ -59,6 +60,22 @@ export async function GET(request: NextRequest) {
   const today = new Date();
   const effectiveUntil = endDate < today ? endDate : today;
   const workdaysInPeriod = countWorkdaysUntil(year, month, effectiveUntil, holidays);
+  const normWorkdays = getNormWorkdays(year, month, holidays);
+
+  // OT коэффициенты
+  async function getAppSetting(key: string, defaultVal: number): Promise<number> {
+    const row = await prisma.appSettings.findUnique({ where: { key } });
+    if (!row) return defaultVal;
+    const v = parseFloat(row.value);
+    return isFinite(v) ? v : defaultVal;
+  }
+  const [otCoef1, otCoef2, otThreshold, weekendCoef, holidayCoef] = await Promise.all([
+    getAppSetting("ot_coef_1", DEFAULT_OT_COEF_1),
+    getAppSetting("ot_coef_2", DEFAULT_OT_COEF_2),
+    getAppSetting("ot_threshold", DEFAULT_OT_THRESHOLD),
+    getAppSetting("weekend_coef", DEFAULT_WEEKEND_COEF),
+    getAppSetting("holiday_coef", DEFAULT_HOLIDAY_COEF),
+  ]);
 
   // Получаем подразделения
   const departments = await prisma.department.findMany({
@@ -76,7 +93,13 @@ export async function GET(request: NextRequest) {
             isActive: true,
             departmentId: { in: deptIds },
           },
-          select: { id: true, departmentId: true },
+          select: {
+            id: true,
+            departmentId: true,
+            schedule: { select: { hoursPerDay: true } },
+            positionRef: { select: { baseSalary: true } },
+            hireDate: true,
+          },
         })
       : [];
 
@@ -94,6 +117,7 @@ export async function GET(request: NextRequest) {
       : [];
 
   // Агрегируем
+  const empById = new Map(employees.map((e) => [e.id, e]));
   const empsByDept = new Map<string, string[]>();
   for (const emp of employees) {
     const list = empsByDept.get(emp.departmentId) ?? [];
@@ -110,17 +134,58 @@ export async function GET(request: NextRequest) {
 
   const reports: ReportData[] = departments.map((dept) => {
     const deptEmpIds = empsByDept.get(dept.id) ?? [];
-    const deptRecords = deptEmpIds.flatMap((id) => recordsByEmpId.get(id) ?? []);
+    const deptRecords = deptEmpIds.flatMap((id) => (recordsByEmpId.get(id) ?? []).filter((r) => r.slot === 0));
     const totalEmployees = deptEmpIds.length;
 
     const workRecords = deptRecords.filter((r) => r.markType.code === "Я");
     const workDays = workRecords.length;
-    const totalWorkHours = workRecords.reduce((s, r) => s + r.markType.defaultHours, 0);
+    const totalWorkHours = workRecords.reduce((s, r) => {
+      const schedHours = empById.get(r.employeeId)?.schedule?.hoursPerDay ?? 8;
+      return s + (r.actualHours ?? schedHours);
+    }, 0);
 
     const denominator = totalEmployees * workdaysInPeriod;
     const attendanceRate =
       denominator > 0 ? Math.round((workDays / denominator) * 1000) / 10 : 0;
     const unmarkedDays = Math.max(0, denominator - deptRecords.length);
+
+    // Расчёт ФОТ
+    let totalSalary = 0;
+    let salaryEmployeeCount = 0;
+    for (const empId of deptEmpIds) {
+      const emp = empById.get(empId);
+      if (!emp?.positionRef?.baseSalary) continue;
+      salaryEmployeeCount++;
+      const hoursPerDay = emp.schedule?.hoursPerDay ?? 8;
+      const normHours = normWorkdays * hoursPerDay;
+      const empRecs = (recordsByEmpId.get(empId) ?? []).filter((r) => r.slot === 0);
+      let workedHours = 0;
+      let weekendHours = 0;
+      let holidayHours = 0;
+      let otHours = 0;
+      let sickDays = 0;
+      let vacationDays = 0;
+      for (const rec of empRecs) {
+        if (rec.markType.code === "Б") { sickDays++; otHours += rec.overtimeHours; continue; }
+        if (rec.markType.code === "ОТ") { vacationDays++; otHours += rec.overtimeHours; continue; }
+        if (rec.markType.defaultHours <= 0) { otHours += rec.overtimeHours; continue; }
+        const effectiveHours = rec.actualHours ?? hoursPerDay;
+        otHours += rec.overtimeHours;
+        const d = rec.date;
+        const y = d.getUTCFullYear(), m = d.getUTCMonth(), day = d.getUTCDate();
+        const dateObj = new Date(y, m, day);
+        const dateKey = formatDateKey(y, m, day);
+        const holiday = holidays.get(dateKey);
+        if (holiday && !holiday.isShortened) holidayHours += effectiveHours;
+        else if (isWeekend(dateObj)) weekendHours += effectiveHours;
+        else workedHours += effectiveHours;
+      }
+      const periodStart = new Date(year, month, 1);
+      const experienceYears = emp.hireDate ? getExperienceYears(emp.hireDate, periodStart) : 0;
+      const bd = calculateSalary({ baseSalary: emp.positionRef.baseSalary, normHours, normDays: normWorkdays, workedHours, otHours, weekendHours, holidayHours, sickDays, vacationDays, experienceYears, otCoef1, otCoef2, otThreshold, weekendCoef, holidayCoef });
+      totalSalary += bd.totalPay;
+    }
+    const avgSalary = salaryEmployeeCount > 0 ? totalSalary / salaryEmployeeCount : 0;
 
     return {
       departmentId: dept.id,
@@ -136,9 +201,9 @@ export async function GET(request: NextRequest) {
       attendanceRate,
       workdaysInPeriod,
       unmarkedDays,
-      totalSalary: 0,
-      avgSalary: 0,
-      salaryEmployeeCount: 0,
+      totalSalary,
+      avgSalary,
+      salaryEmployeeCount,
     };
   });
 

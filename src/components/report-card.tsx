@@ -102,12 +102,19 @@ export function ReportCard({ data }: ReportCardProps) {
             )}
           </div>
 
-          {/* Незаполненные дни — вне грида, всегда на всю ширину */}
-          {data.unmarkedDays > 0 && (
+          {/* Заполненность — всегда отображается */}
+          {data.unmarkedDays > 0 ? (
             <div className="flex items-center gap-2 rounded-md bg-yellow-50 dark:bg-yellow-950/30 px-2.5 py-1.5">
               <AlertTriangle className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-500 shrink-0" />
               <span className="text-xs text-yellow-700 dark:text-yellow-400">
                 Незаполнено: {data.unmarkedDays} дн.
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-md bg-green-50 dark:bg-green-950/30 px-2.5 py-1.5">
+              <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center text-green-600 dark:text-green-400 text-xs font-bold">✓</span>
+              <span className="text-xs text-green-700 dark:text-green-400">
+                Заполнено полностью
               </span>
             </div>
           )}

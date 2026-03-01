@@ -34,9 +34,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const dateParam = searchParams.get("date");
 
-  // Если передана дата — используем её, иначе сегодня
   const selectedDate = dateParam ? new Date(dateParam) : new Date();
-  // Нормализуем до полуночи локального времени через UTC
   const selYear = selectedDate.getUTCFullYear();
   const selMonth = selectedDate.getUTCMonth();
   const selDay = selectedDate.getUTCDate();
@@ -47,7 +45,6 @@ export async function GET(request: Request) {
   const startDate = new Date(Date.UTC(year, month, 1));
   const endDate = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999));
 
-  // Выбранный день (range)
   const dayStart = new Date(Date.UTC(selYear, selMonth, selDay));
   const dayEnd = new Date(Date.UTC(selYear, selMonth, selDay + 1));
 
@@ -56,10 +53,15 @@ export async function GET(request: Request) {
       ? { departmentId: user.departmentId }
       : {};
 
+  const deptCountFilter =
+    user.role === "MANAGER" && user.departmentId
+      ? { id: user.departmentId }
+      : undefined;
+
   const [totalEmployees, totalDepartments, timeRecords, dayRecords, departments, allEmployees, holidays] =
     await Promise.all([
       prisma.employee.count({ where: { isActive: true, ...departmentFilter } }),
-      prisma.department.count(),
+      prisma.department.count({ where: deptCountFilter }),
       prisma.timeRecord.findMany({
         where: {
           date: { gte: startDate, lte: endDate },
@@ -87,13 +89,17 @@ export async function GET(request: Request) {
   let vacationDaysTotal = 0;
   let sickDaysTotal = 0;
   let absentDaysTotal = 0;
+  let businessTripDaysTotal = 0;
+  let shortenedDaysTotal = 0;
 
   for (const rec of timeRecords) {
     switch (rec.markType.code) {
-      case "Я": workDaysTotal++; break;
-      case "ОТ": vacationDaysTotal++; break;
-      case "Б": sickDaysTotal++; break;
-      case "П": absentDaysTotal++; break;
+      case "Я":  workDaysTotal++;         break;
+      case "ОТ": vacationDaysTotal++;     break;
+      case "Б":  sickDaysTotal++;         break;
+      case "П":  absentDaysTotal++;       break;
+      case "К":  businessTripDaysTotal++; break;
+      case "С":  shortenedDaysTotal++;    break;
     }
   }
 
@@ -106,15 +112,15 @@ export async function GET(request: Request) {
   for (const rec of dayRecords) {
     dayMarkedEmployees.add(rec.employeeId);
     switch (rec.markType.code) {
-      case "Я": todayPresent++; break;
+      case "Я":  todayPresent++;  break;
       case "ОТ": todayVacation++; break;
-      case "Б": todaySick++; break;
-      case "П": todayAbsent++; break;
+      case "Б":  todaySick++;     break;
+      case "П":  todayAbsent++;   break;
     }
   }
   const todayUnmarked = totalEmployees - dayMarkedEmployees.size;
 
-  // Per-department attendance rate for month-to-selected-day
+  // Dept rates
   const refDate = new Date(selYear, selMonth, selDay);
   const workdaysInPeriod = countWorkdaysUntil(year, month, refDate, holidays);
 
@@ -155,7 +161,7 @@ export async function GET(request: Request) {
   const worstDept = deptRates.length > 0 ? deptRates[0] : null;
   const bestDept = deptRates.length > 1 ? deptRates[deptRates.length - 1] : null;
 
-  // Daily chart: sick (Б) and absent (П) counts per calendar day up to selected day
+  // Daily chart
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const chartLastDay = Math.min(selDay, daysInMonth);
   const dailySick = new Array<number>(chartLastDay).fill(0);
@@ -173,7 +179,47 @@ export async function GET(request: Request) {
     absent: dailyAbsent[i],
   }));
 
-  // Является ли выбранная дата "сегодня"
+  // === Заполненность табеля (fillRate) ===
+  const workdaysInMonth = countWorkdaysUntil(year, month, refDate, holidays);
+  const expectedRecords = totalEmployees * workdaysInMonth;
+  const actualRecords = workDaysTotal + vacationDaysTotal + sickDaysTotal + absentDaysTotal + businessTripDaysTotal + shortenedDaysTotal;
+  const fillRate = expectedRecords > 0 ? Math.round((actualRecords / expectedRecords) * 100) : 0;
+
+  // === Аномалии ===
+  type Anomaly = { type: string; count: number; label: string };
+  const anomalies: Anomaly[] = [];
+
+  // Тип 1: сотрудники с 3+ прогулами за месяц
+  const absentByEmp = new Map<string, number>();
+  for (const rec of timeRecords) {
+    if (rec.markType.code === "П") {
+      absentByEmp.set(rec.employeeId, (absentByEmp.get(rec.employeeId) ?? 0) + 1);
+    }
+  }
+  const manyAbsentCount = Array.from(absentByEmp.values()).filter((c) => c >= 3).length;
+  if (manyAbsentCount > 0) {
+    anomalies.push({ type: "many_absences", count: manyAbsentCount, label: "сотрудников с 3+ прогулами в этом месяце" });
+  }
+
+  // Тип 2: длительный больничный (7+ дней за месяц)
+  const sickByEmp = new Map<string, number>();
+  for (const rec of timeRecords) {
+    if (rec.markType.code === "Б") {
+      sickByEmp.set(rec.employeeId, (sickByEmp.get(rec.employeeId) ?? 0) + 1);
+    }
+  }
+  const longSickCount = Array.from(sickByEmp.values()).filter((c) => c >= 7).length;
+  if (longSickCount > 0) {
+    anomalies.push({ type: "long_sick", count: longSickCount, label: "сотрудников на длительном больничном (7+ дней)" });
+  }
+
+  // Тип 3: сотрудники совсем без отметок за месяц
+  const markedThisMonth = new Set(timeRecords.map((r) => r.employeeId));
+  const noRecordsCount = allEmployees.filter((e) => !markedThisMonth.has(e.id)).length;
+  if (noRecordsCount > 0) {
+    anomalies.push({ type: "no_records", count: noRecordsCount, label: "сотрудников без отметок в этом месяце" });
+  }
+
   const isToday =
     selYear === now.getFullYear() &&
     selMonth === now.getMonth() &&
@@ -187,6 +233,7 @@ export async function GET(request: Request) {
     vacationDaysTotal,
     sickDaysTotal,
     absentDaysTotal,
+    businessTripDaysTotal,
     todayPresent,
     todayVacation,
     todaySick,
@@ -195,6 +242,8 @@ export async function GET(request: Request) {
     worstDept,
     bestDept,
     dailyChart,
+    fillRate,
+    anomalies,
     isToday,
     selectedDate: `${selYear}-${String(selMonth + 1).padStart(2, "0")}-${String(selDay).padStart(2, "0")}`,
   });

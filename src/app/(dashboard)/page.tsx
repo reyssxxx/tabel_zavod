@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   CalendarDays, Users, BarChart3, CheckSquare, Plane, HeartPulse,
   TrendingUp, TrendingDown, AlertTriangle, UserCheck, Clock,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, X, ClipboardCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -23,6 +23,12 @@ interface DailyPoint {
   absent: number;
 }
 
+interface Anomaly {
+  type: string;
+  count: number;
+  label: string;
+}
+
 interface DashboardStats {
   totalEmployees: number;
   totalDepartments: number;
@@ -31,6 +37,7 @@ interface DashboardStats {
   vacationDaysTotal: number;
   sickDaysTotal: number;
   absentDaysTotal: number;
+  businessTripDaysTotal: number;
   todayPresent: number;
   todayVacation: number;
   todaySick: number;
@@ -39,8 +46,35 @@ interface DashboardStats {
   worstDept: DeptSpotlight | null;
   bestDept: DeptSpotlight | null;
   dailyChart: DailyPoint[];
+  fillRate: number;
+  anomalies: Anomaly[];
   isToday: boolean;
   selectedDate: string;
+}
+
+const ANOMALY_CONFIG: Record<string, { icon: React.ElementType; bg: string; border: string; text: string }> = {
+  many_absences: { icon: AlertTriangle, bg: "bg-amber-50",  border: "border-amber-200", text: "text-amber-800" },
+  long_sick:     { icon: HeartPulse,   bg: "bg-red-50",    border: "border-red-200",   text: "text-red-800"   },
+  no_records:    { icon: Clock,        bg: "bg-slate-50",  border: "border-slate-200", text: "text-slate-700"  },
+};
+
+function AnomalyBanner({ anomaly, onDismiss }: { anomaly: Anomaly; onDismiss: () => void }) {
+  const cfg = ANOMALY_CONFIG[anomaly.type] ?? ANOMALY_CONFIG.no_records;
+  const Icon = cfg.icon;
+  return (
+    <div className={`flex items-center gap-3 rounded-lg border px-4 py-2.5 text-sm ${cfg.bg} ${cfg.border} ${cfg.text}`}>
+      <Icon className="h-4 w-4 shrink-0" />
+      <span className="flex-1">
+        <span className="font-semibold">{anomaly.count}</span> {anomaly.label}
+      </span>
+      <Link href="/timesheet" className="underline underline-offset-2 text-xs font-medium hover:opacity-80">
+        Открыть табель →
+      </Link>
+      <button onClick={onDismiss} className="ml-1 opacity-60 hover:opacity-100">
+        <X className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
 }
 
 function formatLocalDate(d: Date): string {
@@ -173,6 +207,7 @@ export default function DashboardPage() {
   const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [dismissedAnomalies, setDismissedAnomalies] = useState<Set<string>>(new Set());
 
   const fetchStats = useCallback((date: Date) => {
     setLoading(true);
@@ -259,6 +294,21 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Anomaly banners */}
+      {stats && stats.anomalies && stats.anomalies.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {stats.anomalies
+            .filter((a) => !dismissedAnomalies.has(a.type))
+            .map((a) => (
+              <AnomalyBanner
+                key={a.type}
+                anomaly={a}
+                onDismiss={() => setDismissedAnomalies((prev) => new Set([...prev, a.type]))}
+              />
+            ))}
+        </div>
+      )}
+
       {/* Day stats */}
       <div>
         <p className="text-sm font-medium text-muted-foreground mb-3">
@@ -329,7 +379,7 @@ export default function DashboardPage() {
         <p className="text-sm font-medium text-muted-foreground mb-3">
           {stats?.currentMonth ?? "Текущий месяц"} — итоги
         </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
               <CardTitle className="text-sm font-medium">Активных сотрудников</CardTitle>
@@ -375,6 +425,22 @@ export default function DashboardPage() {
               <p className="text-xs text-muted-foreground mt-1">
                 {val(stats?.absentDaysTotal)} прогулов
               </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
+              <CardTitle className="text-sm font-medium">Заполненность табеля</CardTitle>
+              <ClipboardCheck className="h-4 w-4 text-violet-500" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-3xl font-bold ${
+                (stats?.fillRate ?? 0) >= 90 ? "text-green-600" :
+                (stats?.fillRate ?? 0) >= 70 ? "text-amber-600" : "text-red-600"
+              }`}>
+                {stats ? `${stats.fillRate}%` : "—"}
+              </div>
+              <RateBar rate={stats?.fillRate ?? 0} />
             </CardContent>
           </Card>
         </div>

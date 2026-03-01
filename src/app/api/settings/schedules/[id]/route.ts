@@ -49,6 +49,10 @@ export async function DELETE(
     );
   }
 
-  await prisma.workSchedule.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  try {
+    await prisma.workSchedule.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Ошибка удаления" }, { status: 500 });
+  }
 }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import Link from "next/link";
 import { ReportFilters } from "@/components/report-filters";
 import { ReportCard } from "@/components/report-card";
 import { ExportButtons } from "@/components/export-buttons";
@@ -20,7 +21,6 @@ export default function ReportsPage() {
   const { data: session } = useSession();
   const user = session?.user as SessionUser | undefined;
 
-  // Загружаем список подразделений при монтировании
   useEffect(() => {
     fetch("/api/departments")
       .then((r) => r.json())
@@ -30,14 +30,12 @@ export default function ReportsPage() {
       .catch(() => setDepartments([]));
   }, []);
 
-  // Для MANAGER фиксируем подразделение
   useEffect(() => {
     if (user?.role === "MANAGER" && user.departmentId) {
       setDepartmentId(user.departmentId);
     }
   }, [user]);
 
-  // Загружаем данные при изменении фильтров
   useEffect(() => {
     if (!user) return;
     setLoading(true);
@@ -50,11 +48,7 @@ export default function ReportsPage() {
       .finally(() => setLoading(false));
   }, [year, month, departmentId, user]);
 
-  function handleFiltersChange(value: {
-    year: number;
-    month: number;
-    departmentId: string;
-  }) {
+  function handleFiltersChange(value: { year: number; month: number; departmentId: string }) {
     setYear(value.year);
     setMonth(value.month);
     setDepartmentId(value.departmentId);
@@ -64,7 +58,6 @@ export default function ReportsPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Отчёты</h1>
 
-      {/* Фильтры и кнопки экспорта */}
       <div className="flex flex-wrap items-center gap-3">
         <ReportFilters
           year={year}
@@ -84,21 +77,20 @@ export default function ReportsPage() {
         </div>
       </div>
 
-      {/* Карточки отчётов */}
       {loading ? (
         <p className="text-muted-foreground text-sm">Загрузка...</p>
       ) : reports.length === 0 ? (
         <p className="text-muted-foreground text-sm">Нет данных за выбранный период</p>
       ) : (
-        <div
-          className={
-            departmentId === "all"
-              ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-              : "max-w-sm"
-          }
-        >
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {reports.map((report) => (
-            <ReportCard key={report.departmentId} data={report} />
+            <Link
+              key={report.departmentId}
+              href={`/reports/${report.departmentId}?year=${year}&month=${month}`}
+              className="block cursor-pointer hover:shadow-md transition-shadow rounded-lg"
+            >
+              <ReportCard data={report} />
+            </Link>
           ))}
         </div>
       )}

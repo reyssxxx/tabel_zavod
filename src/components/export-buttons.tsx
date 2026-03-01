@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Download, FileSpreadsheet, FileText } from "lucide-react";
+import { toast } from "sonner";
 
 interface ExportButtonsProps {
   year: number;
@@ -30,6 +31,7 @@ export function ExportButtons({ year, month, departmentId, type }: ExportButtons
       URL.revokeObjectURL(objectUrl);
     } catch (err) {
       console.error("Export error:", err);
+      toast.error("Ошибка экспорта. Попробуйте снова.");
     } finally {
       setLoading((prev) => ({ ...prev, [key]: false }));
     }

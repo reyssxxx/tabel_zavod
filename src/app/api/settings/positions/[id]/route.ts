@@ -33,8 +33,15 @@ export async function PUT(
         include: { _count: { select: { employees: true } } },
       });
       return NextResponse.json({ id: position.id, name: position.name, baseSalary: position.baseSalary, employeeCount: position._count.employees });
-    } catch {
-      return NextResponse.json({ error: "Должность с таким названием уже существует" }, { status: 400 });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("P2002") || msg.includes("Unique constraint")) {
+        return NextResponse.json({ error: "Должность с таким названием уже существует" }, { status: 400 });
+      }
+      if (msg.includes("P2025") || msg.includes("Record to update not found")) {
+        return NextResponse.json({ error: "Должность не найдена" }, { status: 404 });
+      }
+      return NextResponse.json({ error: "Ошибка обновления" }, { status: 500 });
     }
   } catch (err) {
     return handleAuthError(err) ?? NextResponse.json({ error: "Ошибка сервера" }, { status: 500 });

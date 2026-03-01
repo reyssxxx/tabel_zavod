@@ -47,6 +47,9 @@ export async function GET(request: NextRequest) {
     if (holiday) holidaysInMonth[key] = holiday;
   }
 
+  const workHoursSetting = await prisma.appSettings.findUnique({ where: { key: "work_hours_per_day" } });
+  const defaultWorkHours = workHoursSetting ? parseFloat(workHoursSetting.value) : 8;
+
   const markTypes = await prisma.markType.findMany({
     orderBy: { code: "asc" },
     select: { id: true, code: true, name: true, defaultHours: true, color: true },
@@ -59,7 +62,7 @@ export async function GET(request: NextRequest) {
     // Store defaultHours per day/slot to avoid O(n²) .find() in the second pass
     const defaultHoursMap: Record<number, { primary?: number; secondary?: number }> = {};
     let totalDays = 0, totalHours = 0, totalOvertimeHours = 0;
-    const schedHours = emp.schedule?.hoursPerDay ?? 8;
+    const schedHours = emp.schedule?.hoursPerDay ?? defaultWorkHours;
 
     for (const rec of empRecords) {
       const day = rec.date.getUTCDate();

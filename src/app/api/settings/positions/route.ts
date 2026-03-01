@@ -36,8 +36,12 @@ export async function POST(request: NextRequest) {
     try {
       const position = await prisma.position.create({ data: { name, baseSalary } });
       return NextResponse.json({ id: position.id, name: position.name, baseSalary: position.baseSalary, employeeCount: 0 }, { status: 201 });
-    } catch {
-      return NextResponse.json({ error: "Должность с таким названием уже существует" }, { status: 400 });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "";
+      if (msg.includes("P2002") || msg.includes("Unique constraint")) {
+        return NextResponse.json({ error: "Должность с таким названием уже существует" }, { status: 400 });
+      }
+      return NextResponse.json({ error: "Ошибка создания" }, { status: 500 });
     }
   } catch (err) {
     if (err instanceof Error && err.message === "Unauthorized")

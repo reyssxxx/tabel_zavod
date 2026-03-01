@@ -10,9 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const DEMO_ACCOUNTS = [
   { label: "Соколов Дмитрий (Администратор)",    email: "sokolov.dmitry@tantk.ru",  password: "Beriev@2026",  color: "bg-red-500",    role: "ADMIN" },
-  { label: "Васильев Олег (Мастер Цеха №1)",      email: "vasiliev.oleg@tantk.ru",   password: "Ceh1Master!",  color: "bg-blue-500",   role: "MANAGER" },
-  { label: "Захаров Роман (Мастер Цеха №2)",      email: "zaharov.roman@tantk.ru",   password: "Ceh2Master!",  color: "bg-blue-400",   role: "MANAGER" },
-  { label: "Фёдоров Михаил (Мастер Цеха №3)",     email: "fedorov.mikhail@tantk.ru", password: "Ceh3Master!",  color: "bg-blue-300",   role: "MANAGER" },
+  { label: "Васильев Олег (Менеджер отдела №1)",   email: "vasiliev.oleg@tantk.ru",   password: "Ceh1Master!",  color: "bg-blue-500",   role: "MANAGER" },
+  { label: "Захаров Роман (Менеджер отдела №2)",   email: "zaharov.roman@tantk.ru",   password: "Ceh2Master!",  color: "bg-blue-400",   role: "MANAGER" },
+  { label: "Фёдоров Михаил (Менеджер отдела №3)",  email: "fedorov.mikhail@tantk.ru", password: "Ceh3Master!",  color: "bg-blue-300",   role: "MANAGER" },
   { label: "Петрова Марина (Бухгалтер)",          email: "petrova.marina@tantk.ru",  password: "Buhgalter1!", color: "bg-green-500",  role: "ACCOUNTANT" },
   { label: "Орлова Наталья (Бухгалтер)",          email: "orlova.natalia@tantk.ru",  password: "Buhgalter2!", color: "bg-green-400",  role: "ACCOUNTANT" },
   { label: "Смирнова Елена (Специалист ОК)",      email: "smirnova.elena@tantk.ru",  password: "HrOtdel2026!", color: "bg-purple-500", role: "HR" },

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSeparator } from "@/components/ui/select";
 import { MONTHS } from "@/lib/constants";
+import { formatDateKey } from "@/lib/holidays";
 import type { TimesheetRow, MarkTypeOption, DepartmentOption, SessionUser } from "@/types";
 
 interface TimesheetData {
@@ -234,6 +235,23 @@ export default function TimesheetPage() {
     );
   }, [data, employeeSearch]);
 
+  const fillStats = useMemo(() => {
+    if (!data || data.rows.length === 0) return null;
+    const workDayCount = Array.from({ length: data.daysInMonth }, (_, i) => i + 1).filter((d) => {
+      const date = new Date(year, month, d);
+      const dow = date.getDay();
+      if (dow === 0 || dow === 6) return false;
+      const key = formatDateKey(year, month, d);
+      const hol = data.holidays[key];
+      if (hol && !hol.isShortened) return false;
+      return true;
+    }).length;
+    const expected = data.rows.length * workDayCount;
+    const filled = data.rows.reduce((sum, row) => sum + Object.keys(row.records).length, 0);
+    const pct = expected > 0 ? Math.round((filled / expected) * 100) : 0;
+    return { filled, expected, pct };
+  }, [data, year, month]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -250,6 +268,15 @@ export default function TimesheetPage() {
                 : (employeeSearch ? filteredRows.length : data.rows.length) < 5
                 ? "сотрудника"
                 : "сотрудников"}
+            </span>
+          )}
+          {fillStats && !loading && (
+            <span className={`text-sm font-medium px-2 py-0.5 rounded-full ${
+              fillStats.pct >= 90 ? "bg-green-100 text-green-700" :
+              fillStats.pct >= 70 ? "bg-amber-100 text-amber-700" :
+              "bg-red-100 text-red-700"
+            }`}>
+              Заполнено: {fillStats.filled}/{fillStats.expected} ({fillStats.pct}%)
             </span>
           )}
           {!loading && data && (

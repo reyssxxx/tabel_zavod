@@ -16,9 +16,9 @@ import { ROLE_LABELS } from "@/lib/constants";
 
 const DEMO_ACCOUNTS = [
   { email: "sokolov.dmitry@tantk.ru",  password: "Beriev@2026",   label: "Соколов Дмитрий (Администратор)",  icon: Shield,     color: "bg-red-500"    },
-  { email: "vasiliev.oleg@tantk.ru",   password: "Ceh1Master!",   label: "Васильев Олег (Мастер Цеха №1)",   icon: Wrench,     color: "bg-blue-500"   },
-  { email: "zaharov.roman@tantk.ru",   password: "Ceh2Master!",   label: "Захаров Роман (Мастер Цеха №2)",   icon: Wrench,     color: "bg-blue-400"   },
-  { email: "fedorov.mikhail@tantk.ru", password: "Ceh3Master!",   label: "Фёдоров Михаил (Мастер Цеха №3)",  icon: Wrench,     color: "bg-blue-300"   },
+  { email: "vasiliev.oleg@tantk.ru",   password: "Ceh1Master!",   label: "Васильев Олег (Менеджер отдела №1)",  icon: Wrench,     color: "bg-blue-500"   },
+  { email: "zaharov.roman@tantk.ru",   password: "Ceh2Master!",   label: "Захаров Роман (Менеджер отдела №2)",  icon: Wrench,     color: "bg-blue-400"   },
+  { email: "fedorov.mikhail@tantk.ru", password: "Ceh3Master!",   label: "Фёдоров Михаил (Менеджер отдела №3)", icon: Wrench,     color: "bg-blue-300"   },
   { email: "petrova.marina@tantk.ru",  password: "Buhgalter1!",  label: "Петрова Марина (Бухгалтер)",        icon: Calculator, color: "bg-green-500"  },
   { email: "orlova.natalia@tantk.ru",  password: "Buhgalter2!",  label: "Орлова Наталья (Бухгалтер)",        icon: Calculator, color: "bg-green-400"  },
   { email: "smirnova.elena@tantk.ru",  password: "HrOtdel2026!", label: "Смирнова Елена (Специалист ОК)",    icon: Users,      color: "bg-purple-500" },
